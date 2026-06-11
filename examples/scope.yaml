@@ -1,0 +1,22 @@
+# Example newfound scope.
+# Only monitor targets you own or that are explicitly in scope for an
+# authorized bug-bounty / vulnerability-disclosure program.
+
+name: example-program
+
+targets:
+  - example.com
+  # - example.org
+
+# Hosts/subtrees to ignore (exact host or any subdomain of it).
+exclude:
+  - internal.example.com
+
+# Minimum priority to report: low | medium | high
+min_priority: medium
+
+notify:
+  # Any endpoint that accepts a JSON POST. Slack/Discord incoming-webhook URLs work.
+  webhooks: []
+  slack: false
+  discord: false

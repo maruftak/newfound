@@ -1,0 +1,59 @@
+package config
+
+import "testing"
+
+func TestParseValid(t *testing.T) {
+	y := []byte(`
+name: prog
+targets:
+  - Example.com
+  - example.org
+exclude:
+  - dev.example.com
+min_priority: high
+notify:
+  webhooks: ["https://hooks.slack.com/x"]
+  slack: true
+`)
+	c, err := Parse(y)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Name != "prog" || len(c.Targets) != 2 {
+		t.Fatalf("unexpected config: %+v", c)
+	}
+	if c.Targets[0] != "example.com" {
+		t.Errorf("target should be lowercased, got %q", c.Targets[0])
+	}
+	if !c.Excluded("api.dev.example.com") {
+		t.Errorf("api.dev.example.com should be excluded by suffix")
+	}
+	if c.Excluded("example.com") {
+		t.Errorf("root example.com should not be excluded")
+	}
+}
+
+func TestParseDefaultsPriority(t *testing.T) {
+	c, err := Parse([]byte("name: x\ntargets: [a.com]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.MinPriority != "low" {
+		t.Errorf("default min_priority should be low, got %q", c.MinPriority)
+	}
+}
+
+func TestParseErrors(t *testing.T) {
+	cases := map[string]string{
+		"no name":       "targets: [a.com]",
+		"no targets":    "name: x",
+		"scheme target": "name: x\ntargets: [\"https://a.com\"]",
+		"path target":   "name: x\ntargets: [\"a.com/app\"]",
+		"bad priority":  "name: x\ntargets: [a.com]\nmin_priority: urgent",
+	}
+	for name, y := range cases {
+		if _, err := Parse([]byte(y)); err == nil {
+			t.Errorf("%s: expected error, got nil", name)
+		}
+	}
+}

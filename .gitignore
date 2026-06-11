@@ -1,0 +1,17 @@
+# binaries
+/newfound
+/dist/
+
+# local state / databases
+*.db
+*.db-journal
+*.db-wal
+
+# test / coverage artifacts
+*.out
+coverage.*
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,143 @@
+// Package diff compares two attack-surface snapshots and classifies the
+// changes between them. Diff is a pure function (no I/O) so it can be
+// exhaustively unit-tested.
+package diff
+
+import (
+	"fmt"
+	"sort"
+
+	"github.com/maruftak/newfound/internal/model"
+)
+
+// Kind identifies a category of change.
+type Kind string
+
+const (
+	NewHost      Kind = "NEW_HOST"
+	HostLive     Kind = "HOST_LIVE"
+	StatusChange Kind = "STATUS_CHANGE"
+	IPChange     Kind = "IP_CHANGE"
+	NewTech      Kind = "NEW_TECH"
+	HostGone     Kind = "HOST_GONE"
+)
+
+// Priority levels (higher = more interesting to a hunter).
+const (
+	Low    = 1
+	Medium = 2
+	High   = 3
+)
+
+var defaultPriority = map[Kind]int{
+	NewHost:      High,
+	HostLive:     High,
+	StatusChange: Medium,
+	IPChange:     Medium,
+	NewTech:      Low,
+	HostGone:     Low,
+}
+
+// Change is a single classified difference between snapshots.
+type Change struct {
+	Kind     Kind        `json:"kind"`
+	Target   string      `json:"target"`
+	Host     string      `json:"host"`
+	Detail   string      `json:"detail"`
+	Priority int         `json:"priority"`
+	Asset    model.Asset `json:"asset"`
+}
+
+// Diff compares a previous and current asset set for the same scope and
+// returns classified changes, deterministically ordered (priority desc,
+// then host, then kind).
+func Diff(prev, curr []model.Asset) []Change {
+	prevByHost := indexByHost(prev)
+	currByHost := indexByHost(curr)
+
+	var changes []Change
+
+	for host, c := range currByHost {
+		p, existed := prevByHost[host]
+		if !existed {
+			detail := "new host discovered"
+			if c.Alive {
+				detail = fmt.Sprintf("new live host [%d %s]", c.Status, c.TechString())
+			}
+			changes = append(changes, newChange(NewHost, c, detail))
+			continue
+		}
+		if !p.Alive && c.Alive {
+			changes = append(changes, newChange(HostLive, c,
+				fmt.Sprintf("host came alive [%d %s]", c.Status, c.TechString())))
+		}
+		if p.Status != 0 && c.Status != 0 && p.Status != c.Status {
+			changes = append(changes, newChange(StatusChange, c,
+				fmt.Sprintf("status %d -> %d", p.Status, c.Status)))
+		}
+		if p.IP != "" && c.IP != "" && p.IP != c.IP {
+			changes = append(changes, newChange(IPChange, c,
+				fmt.Sprintf("ip %s -> %s", p.IP, c.IP)))
+		}
+		if added := addedTech(p.Tech, c.Tech); len(added) > 0 {
+			changes = append(changes, newChange(NewTech, c,
+				fmt.Sprintf("new tech: %v", added)))
+		}
+	}
+
+	for host, p := range prevByHost {
+		if _, ok := currByHost[host]; !ok {
+			changes = append(changes, newChange(HostGone, p, "host no longer resolves/responds"))
+		}
+	}
+
+	sortChanges(changes)
+	return changes
+}
+
+func newChange(k Kind, a model.Asset, detail string) Change {
+	return Change{
+		Kind:     k,
+		Target:   a.Target,
+		Host:     a.Host,
+		Detail:   detail,
+		Priority: defaultPriority[k],
+		Asset:    a,
+	}
+}
+
+func indexByHost(assets []model.Asset) map[string]model.Asset {
+	m := make(map[string]model.Asset, len(assets))
+	for _, a := range assets {
+		m[a.Host] = a
+	}
+	return m
+}
+
+// addedTech returns tech present in curr but not prev, sorted.
+func addedTech(prev, curr []string) []string {
+	seen := make(map[string]bool, len(prev))
+	for _, t := range prev {
+		seen[t] = true
+	}
+	var added []string
+	for _, t := range curr {
+		if !seen[t] {
+			added = append(added, t)
+		}
+	}
+	sort.Strings(added)
+	return added
+}
+
+func sortChanges(c []Change) {
+	sort.SliceStable(c, func(i, j int) bool {
+		if c[i].Priority != c[j].Priority {
+			return c[i].Priority > c[j].Priority
+		}
+		if c[i].Host != c[j].Host {
+			return c[i].Host < c[j].Host
+		}
+		return c[i].Kind < c[j].Kind
+	})
+}
