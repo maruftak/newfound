@@ -7,6 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `reconsentry assets --config scope.yaml [--json]` prints the latest captured
+  snapshot (host, liveness, status, IP, tech) straight from the database — no
+  re-probing — so the recorded surface is queryable, not a black box.
 - `reconsentry init [path]` scaffolds a commented starter scope file.
 - `--json` flag emits machine-readable run results (one object per cycle) for
   piping into other tooling.
