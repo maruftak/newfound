@@ -20,12 +20,23 @@ type Notify struct {
 	Slack    []string         `yaml:"slack"`    // Slack incoming-webhook URLs
 	Discord  []string         `yaml:"discord"`  // Discord webhook URLs
 	Telegram []TelegramTarget `yaml:"telegram"` // Telegram bot + chat destinations
+	Email    []EmailTarget    `yaml:"email"`    // SMTP email destinations
 }
 
 // TelegramTarget is a Telegram bot token and the chat it posts to.
 type TelegramTarget struct {
 	Token  string `yaml:"token"`
 	ChatID string `yaml:"chat_id"`
+}
+
+// EmailTarget is an SMTP server and recipients for email alerts.
+type EmailTarget struct {
+	SMTPHost string   `yaml:"smtp_host"`
+	SMTPPort int      `yaml:"smtp_port"`
+	Username string   `yaml:"username"`
+	Password string   `yaml:"password"`
+	From     string   `yaml:"from"`
+	To       []string `yaml:"to"`
 }
 
 // Endpoints returns every configured destination URL.
@@ -144,6 +155,11 @@ func (c *Config) validate() error {
 	for _, tg := range c.Notify.Telegram {
 		if strings.TrimSpace(tg.Token) == "" || strings.TrimSpace(tg.ChatID) == "" {
 			return fmt.Errorf("config: telegram entry needs both token and chat_id")
+		}
+	}
+	for _, em := range c.Notify.Email {
+		if strings.TrimSpace(em.SMTPHost) == "" || strings.TrimSpace(em.From) == "" || len(em.To) == 0 {
+			return fmt.Errorf("config: email entry needs smtp_host, from, and at least one to")
 		}
 	}
 	return nil

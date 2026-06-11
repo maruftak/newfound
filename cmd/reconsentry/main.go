@@ -124,6 +124,9 @@ func cmdRun(args []string) int {
 			for _, tg := range cfg.Notify.Telegram {
 				notifiers = append(notifiers, notify.NewTelegram(tg.Token, tg.ChatID))
 			}
+			for _, em := range cfg.Notify.Email {
+				notifiers = append(notifiers, notify.NewEmail(em.SMTPHost, em.SMTPPort, em.Username, em.Password, em.From, em.To))
+			}
 		}
 		jobs = append(jobs, job{
 			cfg: cfg,

@@ -3,9 +3,11 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/smtp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -104,6 +106,44 @@ func TestTelegramEmptyIsNoop(t *testing.T) {
 	tg := NewTelegram("t", "c")
 	tg.BaseURL = "http://127.0.0.1:0"
 	if err := tg.Notify(context.Background(), "prog", nil); err != nil {
+		t.Errorf("empty changes should be a no-op, got %v", err)
+	}
+}
+
+func TestEmailSends(t *testing.T) {
+	var gotAddr, gotFrom string
+	var gotTo []string
+	var gotMsg []byte
+	e := &Email{
+		Host: "smtp.example.com", Port: 587, Username: "u", Password: "p",
+		From: "from@example.com", To: []string{"a@example.com", "b@example.com"},
+		send: func(addr string, _ smtp.Auth, from string, to []string, msg []byte) error {
+			gotAddr, gotFrom, gotTo, gotMsg = addr, from, to, msg
+			return nil
+		},
+	}
+	if err := e.Notify(context.Background(), "prog", sampleChanges()); err != nil {
+		t.Fatal(err)
+	}
+	if gotAddr != "smtp.example.com:587" {
+		t.Errorf("addr: %q", gotAddr)
+	}
+	if gotFrom != "from@example.com" || len(gotTo) != 2 {
+		t.Errorf("from/to: %q %v", gotFrom, gotTo)
+	}
+	s := string(gotMsg)
+	for _, want := range []string{"Subject: reconsentry: 1 change(s) on prog", "To: a@example.com, b@example.com", "NEW_HOST"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("message missing %q in:\n%s", want, s)
+		}
+	}
+}
+
+func TestEmailEmptyIsNoop(t *testing.T) {
+	e := &Email{send: func(string, smtp.Auth, string, []string, []byte) error {
+		return errors.New("should not send for empty changes")
+	}}
+	if err := e.Notify(context.Background(), "prog", nil); err != nil {
 		t.Errorf("empty changes should be a no-op, got %v", err)
 	}
 }

@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Email (SMTP) notifier: add `notify.email` entries (`smtp_host`, `from`, `to`,
+  optional `smtp_port`/`username`/`password`) to receive alerts by email.
 - Telegram notifier: add `notify.telegram` entries (`token` + `chat_id`) to
   alert via the Telegram Bot API. Delivery shares the same retry/backoff as the
   webhook notifiers.

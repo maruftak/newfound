@@ -86,6 +86,13 @@ notify:
   telegram:                   # Telegram Bot API (sendMessage)
     - token: "123456:ABC-DEF"
       chat_id: "987654321"
+  email:                      # SMTP
+    - smtp_host: smtp.gmail.com
+      smtp_port: 587
+      username: alerts@example.com
+      password: "app-password"
+      from: alerts@example.com
+      to: [me@example.com]
 ```
 
 2. Record a baseline, then monitor:

@@ -141,3 +141,21 @@ func TestParseTelegramRequiresChatID(t *testing.T) {
 		t.Error("telegram entry without chat_id should error")
 	}
 }
+
+func TestParseEmail(t *testing.T) {
+	y := []byte("name: x\ntargets: [a.com]\nnotify:\n  email:\n    - smtp_host: smtp.example.com\n      from: me@example.com\n      to: [you@example.com]\n")
+	c, err := Parse(y)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Notify.Email) != 1 || c.Notify.Email[0].SMTPHost != "smtp.example.com" || len(c.Notify.Email[0].To) != 1 {
+		t.Fatalf("email not parsed: %+v", c.Notify.Email)
+	}
+}
+
+func TestParseEmailRequiresFields(t *testing.T) {
+	y := []byte("name: x\ntargets: [a.com]\nnotify:\n  email:\n    - smtp_host: smtp.example.com\n")
+	if _, err := Parse(y); err == nil {
+		t.Error("email entry without from/to should error")
+	}
+}
