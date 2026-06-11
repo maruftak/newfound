@@ -7,6 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `run --keep N` prunes old snapshots, retaining only the most recent N per
+  scope, so the database stays bounded over months of continuous monitoring
+  (default 0 = keep everything).
 - Multi-scope configs: a file may declare several scopes under a top-level
   `scopes:` list, and `run` monitors them all in one process (each isolated in
   the database). `assets` / `history` take `--scope <name>` to select one.

@@ -171,3 +171,31 @@ func (s *Store) SaveRun(scope string, at time.Time, assets []model.Asset) (int64
 	}
 	return runID, nil
 }
+
+// Prune keeps only the most recent keep runs for scope (and their assets),
+// deleting older snapshots so the database stays bounded over long-running
+// monitoring. keep <= 0 is a no-op (retain everything).
+func (s *Store) Prune(scope string, keep int) error {
+	if keep <= 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin prune: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(
+		`DELETE FROM assets WHERE scope = ? AND run_id NOT IN (
+			SELECT id FROM runs WHERE scope = ? ORDER BY id DESC LIMIT ?)`,
+		scope, scope, keep); err != nil {
+		return fmt.Errorf("prune assets: %w", err)
+	}
+	if _, err := tx.Exec(
+		`DELETE FROM runs WHERE scope = ? AND id NOT IN (
+			SELECT id FROM runs WHERE scope = ? ORDER BY id DESC LIMIT ?)`,
+		scope, scope, keep); err != nil {
+		return fmt.Errorf("prune runs: %w", err)
+	}
+	return tx.Commit()
+}

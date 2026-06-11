@@ -29,6 +29,7 @@ type Pipeline struct {
 	Discover  DiscoverFunc
 	Probe     ProbeFunc
 	Notifiers []notify.Notifier
+	Keep      int              // if > 0, retain only the most recent Keep snapshots per scope
 	Now       func() time.Time // injectable clock; defaults to time.Now
 }
 
@@ -69,6 +70,11 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 	runID, err := p.Store.SaveRun(cfg.Name, now(), assets)
 	if err != nil {
 		return nil, err
+	}
+	if p.Keep > 0 {
+		if err := p.Store.Prune(cfg.Name, p.Keep); err != nil {
+			return nil, err
+		}
 	}
 
 	res := &Result{RunID: runID, Assets: assets, FirstRun: firstRun}

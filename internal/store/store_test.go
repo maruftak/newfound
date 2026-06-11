@@ -102,3 +102,46 @@ func TestRuns(t *testing.T) {
 		t.Errorf("started_at should round-trip from the db, got zero time")
 	}
 }
+
+func TestPrune(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "p.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	for i := 0; i < 4; i++ {
+		if _, err := st.SaveRun("s", time.Now(), []model.Asset{{Host: "a.example.com"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A different scope that must be left untouched by pruning "s".
+	if _, err := st.SaveRun("other", time.Now(), []model.Asset{{Host: "z.example.com"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.Prune("s", 2); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := st.Runs("s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("after Prune(2), want 2 runs, got %d", len(runs))
+	}
+	if latest, err := st.LatestAssets("s"); err != nil || len(latest) != 1 {
+		t.Fatalf("latest assets after prune: got %v, %v", latest, err)
+	}
+
+	// keep <= 0 is a no-op; other scopes untouched.
+	if err := st.Prune("s", 0); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := st.Runs("s"); len(r) != 2 {
+		t.Errorf("Prune(0) should be a no-op, got %d runs", len(r))
+	}
+	if r, _ := st.Runs("other"); len(r) != 1 {
+		t.Errorf("pruning scope s must not touch scope other, got %d runs", len(r))
+	}
+}
