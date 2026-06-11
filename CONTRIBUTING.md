@@ -5,13 +5,15 @@ Thanks for your interest! `reconsentry` is young and contributions are very welc
 ## Development
 
 ```bash
-go build ./...
-go test -race ./...
-gofmt -l .        # should print nothing
-go vet ./...
+make build        # build ./reconsentry
+make race         # go test -race ./...
+make fmt vet      # gofmt + go vet
+make lint         # golangci-lint (install from https://golangci-lint.run)
+make help         # list all targets
 ```
 
-Please run `gofmt` and `go vet` before opening a PR — CI enforces both.
+Please run `make fmt vet` (and ideally `make lint`) before opening a PR — CI
+enforces gofmt, `go vet`, `go build`, and the race tests.
 
 ## Project layout
 

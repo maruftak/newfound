@@ -19,8 +19,9 @@ min_priority: medium
 # (Vercel, Cloudflare, …) rotate IPs constantly and would spam false alerts.
 track_ip: false
 
+# Each list is a set of destination URLs rendered in that platform's format,
+# so one scope can alert a generic endpoint, Slack, and Discord at once.
 notify:
-  # Any endpoint that accepts a JSON POST. Slack/Discord incoming-webhook URLs work.
-  webhooks: []
-  slack: false
-  discord: false
+  webhooks: []   # generic JSON POST to any endpoint
+  slack: []      # e.g. https://hooks.slack.com/services/XXX/YYY/ZZZ
+  discord: []    # e.g. https://discord.com/api/webhooks/XXX/YYY

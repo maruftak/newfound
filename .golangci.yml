@@ -1,0 +1,15 @@
+# golangci-lint configuration. Run locally with: make lint  (or: golangci-lint run)
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - misspell      # typos in comments and docs
+  disable:
+    # `defer x.Close()` on read paths is idiomatic and intentional here.
+    # Revisit by re-enabling with tuned exclude-functions for the closers.
+    - errcheck
+
+linters-settings:
+  misspell:
+    locale: US

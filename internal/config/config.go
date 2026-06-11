@@ -9,11 +9,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Notify holds notification settings for a scope.
+// Notify holds notification settings for a scope. Each field is a list of
+// destination URLs rendered in that platform's format, so a single scope can
+// fan out to a generic endpoint, Slack, and Discord at the same time.
 type Notify struct {
-	Webhooks []string `yaml:"webhooks"`
-	Slack    bool     `yaml:"slack"`
-	Discord  bool     `yaml:"discord"`
+	Webhooks []string `yaml:"webhooks"` // generic JSON POST
+	Slack    []string `yaml:"slack"`    // Slack incoming-webhook URLs
+	Discord  []string `yaml:"discord"`  // Discord webhook URLs
+}
+
+// Endpoints returns every configured destination URL.
+func (n Notify) Endpoints() []string {
+	out := make([]string, 0, len(n.Webhooks)+len(n.Slack)+len(n.Discord))
+	out = append(out, n.Webhooks...)
+	out = append(out, n.Slack...)
+	out = append(out, n.Discord...)
+	return out
 }
 
 // Config is a single monitoring scope.
@@ -67,6 +78,11 @@ func (c *Config) validate() error {
 	case "low", "medium", "high":
 	default:
 		return fmt.Errorf("config: min_priority must be low|medium|high, got %q", c.MinPriority)
+	}
+	for _, u := range c.Notify.Endpoints() {
+		if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+			return fmt.Errorf("config: notify URL %q must start with http:// or https://", u)
+		}
 	}
 	return nil
 }

@@ -12,8 +12,9 @@ exclude:
   - dev.example.com
 min_priority: high
 notify:
-  webhooks: ["https://hooks.slack.com/x"]
-  slack: true
+  webhooks: ["https://my.endpoint/hook"]
+  slack: ["https://hooks.slack.com/services/x"]
+  discord: ["https://discord.com/api/webhooks/y"]
 `)
 	c, err := Parse(y)
 	if err != nil {
@@ -21,6 +22,9 @@ notify:
 	}
 	if c.Name != "prog" || len(c.Targets) != 2 {
 		t.Fatalf("unexpected config: %+v", c)
+	}
+	if got := c.Notify.Endpoints(); len(got) != 3 {
+		t.Errorf("want 3 notify endpoints, got %d: %v", len(got), got)
 	}
 	if c.Targets[0] != "example.com" {
 		t.Errorf("target should be lowercased, got %q", c.Targets[0])
@@ -50,6 +54,7 @@ func TestParseErrors(t *testing.T) {
 		"scheme target": "name: x\ntargets: [\"https://a.com\"]",
 		"path target":   "name: x\ntargets: [\"a.com/app\"]",
 		"bad priority":  "name: x\ntargets: [a.com]\nmin_priority: urgent",
+		"notify url":    "name: x\ntargets: [a.com]\nnotify:\n  slack: [\"not-a-url\"]",
 	}
 	for name, y := range cases {
 		if _, err := Parse([]byte(y)); err == nil {

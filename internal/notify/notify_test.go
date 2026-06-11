@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/maruftak/reconsentry/internal/diff"
@@ -20,7 +21,7 @@ func sampleChanges() []diff.Change {
 
 func TestRenderText(t *testing.T) {
 	out := RenderText("prog", sampleChanges())
-	for _, want := range []string{"prog", "NEW_HOST", "a.example.com"} {
+	for _, want := range []string{"prog", "NEW_HOST", "a.example.com", "https://a.example.com"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("render missing %q: %q", want, out)
 		}
@@ -49,5 +50,42 @@ func TestWebhookSlackPayload(t *testing.T) {
 	}
 	if _, ok := body["text"]; !ok {
 		t.Errorf("slack payload should have a text field, got %v", body)
+	}
+}
+
+func TestWebhookRetriesTransientThenSucceeds(t *testing.T) {
+	var attempts int32
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		if atomic.AddInt32(&attempts, 1) < 3 {
+			rw.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		rw.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	w := NewWebhook(srv.URL, "generic")
+	if err := w.Notify(context.Background(), "prog", sampleChanges()); err != nil {
+		t.Fatalf("should succeed after transient failures, got %v", err)
+	}
+	if got := atomic.LoadInt32(&attempts); got != 3 {
+		t.Errorf("want 3 attempts, got %d", got)
+	}
+}
+
+func TestWebhookDoesNotRetryClientError(t *testing.T) {
+	var attempts int32
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		rw.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	w := NewWebhook(srv.URL, "generic")
+	if err := w.Notify(context.Background(), "prog", sampleChanges()); err == nil {
+		t.Fatal("4xx should return an error")
+	}
+	if got := atomic.LoadInt32(&attempts); got != 1 {
+		t.Errorf("4xx must not be retried; want 1 attempt, got %d", got)
 	}
 }
