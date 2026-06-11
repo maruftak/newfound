@@ -1,5 +1,7 @@
 # binaries
 /reconsentry
+/reconsentry.exe
+*.exe
 /dist/
 
 # local state / databases

@@ -47,6 +47,19 @@ func TestParseDefaultsPriority(t *testing.T) {
 	}
 }
 
+func TestParseStripsBOM(t *testing.T) {
+	bom := string([]byte{0xEF, 0xBB, 0xBF}) // UTF-8 BOM (e.g. Notepad-saved YAML)
+	// BOM at the start of the file and embedded in a target value.
+	y := []byte(bom + "name: x\ntargets:\n  - " + bom + "Example.com\n")
+	c, err := Parse(y)
+	if err != nil {
+		t.Fatalf("BOM-prefixed config should parse, got %v", err)
+	}
+	if len(c.Targets) != 1 || c.Targets[0] != "example.com" {
+		t.Fatalf("BOM not stripped: targets = %q", c.Targets)
+	}
+}
+
 func TestParseErrors(t *testing.T) {
 	cases := map[string]string{
 		"no name":       "targets: [a.com]",

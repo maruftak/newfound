@@ -116,7 +116,7 @@ func dedupHosts(targets, discovered []string) []string {
 	seen := make(map[string]bool, len(all))
 	out := make([]string, 0, len(all))
 	for _, h := range all {
-		h = strings.ToLower(strings.TrimSpace(h))
+		h = strings.ToLower(model.TrimInvisible(h))
 		if h == "" || seen[h] {
 			continue
 		}

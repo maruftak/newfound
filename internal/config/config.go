@@ -2,11 +2,14 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/maruftak/reconsentry/internal/model"
 )
 
 // Notify holds notification settings for a scope. Each field is a list of
@@ -48,6 +51,7 @@ func Load(path string) (*Config, error) {
 
 // Parse validates raw YAML bytes into a Config.
 func Parse(b []byte) (*Config, error) {
+	b = bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF}) // strip leading UTF-8 BOM (e.g. Notepad-saved files)
 	var c Config
 	if err := yaml.Unmarshal(b, &c); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
@@ -93,10 +97,10 @@ func (c *Config) normalize() {
 	}
 	c.MinPriority = strings.ToLower(strings.TrimSpace(c.MinPriority))
 	for i, t := range c.Targets {
-		c.Targets[i] = strings.ToLower(strings.TrimSpace(t))
+		c.Targets[i] = strings.ToLower(model.TrimInvisible(t))
 	}
 	for i, e := range c.Exclude {
-		c.Exclude[i] = strings.ToLower(strings.TrimSpace(e))
+		c.Exclude[i] = strings.ToLower(model.TrimInvisible(e))
 	}
 }
 

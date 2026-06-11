@@ -34,6 +34,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ```
 - Notify endpoint URLs are validated (`http://`/`https://`) at config load.
 
+### Fixed
+- Strip a UTF-8 BOM (`U+FEFF`) from config files and host values. A BOM
+  survives `strings.TrimSpace`, so a scope file saved by a Windows editor
+  (e.g. Notepad) silently corrupted every target — the BOM rode along into
+  the Host header and made the upstream return the wrong response. Found by
+  running the tool against a live target.
+
 ### Removed
 - Dead `prioritize.Sort` helper (results are already ordered by `diff.Diff`).
 

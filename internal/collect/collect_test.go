@@ -41,6 +41,13 @@ func TestParseHttpxPrefersHostIP(t *testing.T) {
 	}
 }
 
+func TestCleanHostStripsBOM(t *testing.T) {
+	bom := string([]byte{0xEF, 0xBB, 0xBF}) // UTF-8 BOM
+	if got := cleanHost(bom + "A.COM"); got != "a.com" {
+		t.Errorf("cleanHost should strip a leading BOM, got %q", got)
+	}
+}
+
 func TestCleanHost(t *testing.T) {
 	cases := map[string]string{
 		"https://a.com/app": "a.com",
