@@ -40,7 +40,15 @@ type Config struct {
 	Notify      Notify   `yaml:"notify"`
 }
 
-// Load reads and validates a scope config from path.
+// rawFile is the on-disk shape of a config: either a single scope (its fields
+// at the top level) or a `scopes:` list of them.
+type rawFile struct {
+	Scopes []Config `yaml:"scopes"`
+	Config `yaml:",inline"`
+}
+
+// Load reads and validates a single-scope config from path. It errors if the
+// file declares multiple scopes; use LoadAll for multi-scope files.
 func Load(path string) (*Config, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -49,18 +57,56 @@ func Load(path string) (*Config, error) {
 	return Parse(b)
 }
 
-// Parse validates raw YAML bytes into a Config.
-func Parse(b []byte) (*Config, error) {
+// LoadAll reads and validates one or more scopes from path.
+func LoadAll(path string) ([]*Config, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+	return ParseAll(b)
+}
+
+// ParseAll parses every scope from raw YAML. A document with a top-level
+// `scopes:` list yields one Config per entry; otherwise the whole document is
+// treated as a single scope. Scope names must be unique.
+func ParseAll(b []byte) ([]*Config, error) {
 	b = bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF}) // strip leading UTF-8 BOM (e.g. Notepad-saved files)
-	var c Config
-	if err := yaml.Unmarshal(b, &c); err != nil {
+	var f rawFile
+	if err := yaml.Unmarshal(b, &f); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
-	c.normalize()
-	if err := c.validate(); err != nil {
+	scopes := f.Scopes
+	if len(scopes) == 0 {
+		scopes = []Config{f.Config}
+	}
+	out := make([]*Config, 0, len(scopes))
+	seen := make(map[string]bool, len(scopes))
+	for i := range scopes {
+		c := scopes[i]
+		c.normalize()
+		if err := c.validate(); err != nil {
+			return nil, err
+		}
+		if seen[c.Name] {
+			return nil, fmt.Errorf("config: duplicate scope name %q", c.Name)
+		}
+		seen[c.Name] = true
+		out = append(out, &c)
+	}
+	return out, nil
+}
+
+// Parse validates raw YAML bytes into a single Config. It errors if the file
+// declares multiple scopes; use ParseAll for multi-scope files.
+func Parse(b []byte) (*Config, error) {
+	scopes, err := ParseAll(b)
+	if err != nil {
 		return nil, err
 	}
-	return &c, nil
+	if len(scopes) != 1 {
+		return nil, fmt.Errorf("config: expected a single scope, got %d", len(scopes))
+	}
+	return scopes[0], nil
 }
 
 func (c *Config) validate() error {

@@ -75,3 +75,51 @@ func TestParseErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestParseAllMultiScope(t *testing.T) {
+	y := []byte(`
+scopes:
+  - name: prog1
+    targets: [a.com]
+  - name: prog2
+    targets: [b.com]
+    min_priority: high
+`)
+	scopes, err := ParseAll(y)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scopes) != 2 {
+		t.Fatalf("want 2 scopes, got %d", len(scopes))
+	}
+	if scopes[0].Name != "prog1" || scopes[1].Name != "prog2" {
+		t.Errorf("names: %q, %q", scopes[0].Name, scopes[1].Name)
+	}
+	if scopes[1].MinPriority != "high" {
+		t.Errorf("prog2 min_priority should be high, got %q", scopes[1].MinPriority)
+	}
+}
+
+func TestParseAllSingleScope(t *testing.T) {
+	scopes, err := ParseAll([]byte("name: solo\ntargets: [a.com]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scopes) != 1 || scopes[0].Name != "solo" {
+		t.Fatalf("want 1 scope named solo, got %+v", scopes)
+	}
+}
+
+func TestParseAllRejectsDuplicateNames(t *testing.T) {
+	y := []byte("scopes:\n  - name: dup\n    targets: [a.com]\n  - name: dup\n    targets: [b.com]\n")
+	if _, err := ParseAll(y); err == nil {
+		t.Error("duplicate scope names should error")
+	}
+}
+
+func TestParseRejectsMultiScope(t *testing.T) {
+	y := []byte("scopes:\n  - name: a\n    targets: [a.com]\n  - name: b\n    targets: [b.com]\n")
+	if _, err := Parse(y); err == nil {
+		t.Error("single-scope Parse should reject a multi-scope file")
+	}
+}

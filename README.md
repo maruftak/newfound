@@ -139,6 +139,25 @@ reconsentry history --config scope.yaml
 #   #1     2026-06-10 22:25:11  5 asset(s)
 ```
 
+### Monitor multiple programs
+
+Declare several scopes under a top-level `scopes:` list and `reconsentry run`
+monitors them all in one process — each with its own targets, priority, and
+notification destinations (see [`examples/multi-scope.yaml`](examples/multi-scope.yaml)):
+
+```yaml
+scopes:
+  - name: acme-public
+    targets: [acme.com]
+    notify: { slack: [https://hooks.slack.com/services/XXX] }
+  - name: widgets-vdp
+    targets: [widgets.example]
+    min_priority: high
+```
+
+`assets` and `history` then take `--scope <name>` to pick one. Single-scope
+files keep working with no changes.
+
 ## What it detects
 
 | Change          | Priority | Meaning                                   |

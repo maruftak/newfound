@@ -1,0 +1,25 @@
+# Multiple programs in one file: reconsentry monitors every scope in a single
+# run (and a single database). Each scope is independent — its own targets,
+# priority threshold, and notification destinations.
+#
+# Only monitor targets you own or that are explicitly in scope for an
+# authorized bug-bounty / vulnerability-disclosure program.
+
+scopes:
+  - name: acme-public
+    targets:
+      - acme.com
+    exclude:
+      - internal.acme.com
+    min_priority: medium
+    notify:
+      slack:
+        - https://hooks.slack.com/services/XXX/YYY/ZZZ
+
+  - name: widgets-vdp
+    targets:
+      - widgets.example
+    min_priority: high
+    notify:
+      discord:
+        - https://discord.com/api/webhooks/XXX/YYY
