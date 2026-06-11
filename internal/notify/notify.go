@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/smtp"
 	"strings"
 	"time"
 
@@ -156,6 +157,72 @@ func (t *Telegram) Notify(ctx context.Context, scope string, changes []diff.Chan
 		base = "https://api.telegram.org"
 	}
 	return deliver(ctx, t.Client, base+"/bot"+t.Token+"/sendMessage", body)
+}
+
+// Email delivers alerts over SMTP.
+type Email struct {
+	Host     string
+	Port     int
+	Username string
+	Password string
+	From     string
+	To       []string
+	send     func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
+}
+
+// NewEmail builds an SMTP email notifier. Port defaults to 587 (submission).
+func NewEmail(host string, port int, username, password, from string, to []string) *Email {
+	if port == 0 {
+		port = 587
+	}
+	return &Email{
+		Host:     host,
+		Port:     port,
+		Username: username,
+		Password: password,
+		From:     from,
+		To:       to,
+		send:     smtp.SendMail,
+	}
+}
+
+// Notify emails the changes. It is a no-op when there are no changes.
+func (e *Email) Notify(ctx context.Context, scope string, changes []diff.Change) error {
+	if len(changes) == 0 {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	subject := fmt.Sprintf("reconsentry: %d change(s) on %s", len(changes), scope)
+	msg := buildEmail(e.From, e.To, subject, RenderText(scope, changes))
+
+	var auth smtp.Auth
+	if e.Username != "" {
+		auth = smtp.PlainAuth("", e.Username, e.Password, e.Host)
+	}
+	send := e.send
+	if send == nil {
+		send = smtp.SendMail
+	}
+	if err := send(fmt.Sprintf("%s:%d", e.Host, e.Port), auth, e.From, e.To, msg); err != nil {
+		return fmt.Errorf("send email: %w", err)
+	}
+	return nil
+}
+
+// buildEmail assembles a minimal RFC 5322 plain-text message.
+func buildEmail(from string, to []string, subject, body string) []byte {
+	var b strings.Builder
+	fmt.Fprintf(&b, "From: %s\r\n", from)
+	fmt.Fprintf(&b, "To: %s\r\n", strings.Join(to, ", "))
+	fmt.Fprintf(&b, "Subject: %s\r\n", subject)
+	b.WriteString("MIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	b.WriteString("\r\n")
+	b.WriteString(body)
+	b.WriteString("\r\n")
+	return []byte(b.String())
 }
 
 // RenderText builds a human-readable multi-line summary of the changes,

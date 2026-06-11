@@ -26,3 +26,4 @@ notify:
   slack: []      # e.g. https://hooks.slack.com/services/XXX/YYY/ZZZ
   discord: []    # e.g. https://discord.com/api/webhooks/XXX/YYY
   telegram: []   # e.g. - { token: "123:ABC", chat_id: "987" }
+  email: []      # e.g. - { smtp_host: smtp.gmail.com, smtp_port: 587, username: u, password: p, from: u, to: [you] }
