@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/url"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/maruftak/newfound/internal/model"
@@ -63,6 +64,7 @@ type httpxLine struct {
 	Input        string   `json:"input"`
 	URL          string   `json:"url"`
 	Host         string   `json:"host"`
+	HostIP       string   `json:"host_ip"`
 	StatusCode   int      `json:"status_code"`
 	Title        string   `json:"title"`
 	Webserver    string   `json:"webserver"`
@@ -80,7 +82,7 @@ func Httpx(ctx context.Context, hosts []string) ([]model.Asset, error) {
 	if err := ensure("httpx"); err != nil {
 		return nil, err
 	}
-	args := []string{"-json", "-silent", "-no-color", "-tech-detect", "-title", "-web-server", "-status-code", "-ip", "-a"}
+	args := []string{"-json", "-silent", "-no-color", "-tech-detect", "-title", "-web-server", "-status-code", "-ip"}
 	out, err := runStdin(ctx, strings.Join(hosts, "\n"), "httpx", args...)
 	if err != nil {
 		return nil, err
@@ -110,11 +112,13 @@ func parseHttpx(b []byte) []model.Asset {
 		if name == "" {
 			continue
 		}
-		ip := ""
-		if len(l.A) > 0 {
-			ip = l.A[0]
-		} else if looksLikeIP(l.Host) {
-			ip = l.Host
+		// Prefer the stable host_ip; fall back to the first sorted A record so
+		// DNS round-robin ordering does not produce spurious IP_CHANGE alerts.
+		ip := l.HostIP
+		if ip == "" && len(l.A) > 0 {
+			sorted := append([]string(nil), l.A...)
+			sort.Strings(sorted)
+			ip = sorted[0]
 		}
 		assets = append(assets, model.Asset{
 			Host:   name,
@@ -184,10 +188,6 @@ func isDigits(s string) bool {
 		}
 	}
 	return true
-}
-
-func looksLikeIP(s string) bool {
-	return strings.Count(s, ".") == 3 || strings.Contains(s, ":")
 }
 
 func runStdin(ctx context.Context, stdin, name string, args ...string) ([]byte, error) {

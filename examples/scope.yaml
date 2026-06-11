@@ -15,6 +15,10 @@ exclude:
 # Minimum priority to report: low | medium | high
 min_priority: medium
 
+# Alert when a host's resolved IP changes. Off by default: CDN/cloud hosts
+# (Vercel, Cloudflare, …) rotate IPs constantly and would spam false alerts.
+track_ip: false
+
 notify:
   # Any endpoint that accepts a JSON POST. Slack/Discord incoming-webhook URLs work.
   webhooks: []

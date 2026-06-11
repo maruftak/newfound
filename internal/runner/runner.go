@@ -48,11 +48,11 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 		now = p.Now
 	}
 
-	hosts, err := p.Discover(ctx, cfg.Targets)
+	discovered, err := p.Discover(ctx, cfg.Targets)
 	if err != nil {
 		return nil, fmt.Errorf("discover: %w", err)
 	}
-	hosts = filterExcluded(hosts, cfg)
+	hosts := filterExcluded(dedupHosts(cfg.Targets, discovered), cfg)
 
 	probed, err := p.Probe(ctx, hosts)
 	if err != nil {
@@ -74,6 +74,9 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 	res := &Result{RunID: runID, Assets: assets, FirstRun: firstRun}
 	if !firstRun {
 		changes := diff.Diff(prev, assets)
+		if !cfg.TrackIP {
+			changes = dropKind(changes, diff.IPChange)
+		}
 		res.Changes = prioritize.Filter(changes, prioritize.Level(cfg.MinPriority))
 	}
 
@@ -91,6 +94,34 @@ func filterExcluded(hosts []string, cfg *config.Config) []string {
 		if !cfg.Excluded(h) {
 			out = append(out, h)
 		}
+	}
+	return out
+}
+
+// dropKind removes all changes of the given kind.
+func dropKind(changes []diff.Change, k diff.Kind) []diff.Change {
+	out := make([]diff.Change, 0, len(changes))
+	for _, c := range changes {
+		if c.Kind != k {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// dedupHosts merges seed targets with discovered hosts (targets are always
+// monitored, even when discovery returns nothing) and removes duplicates.
+func dedupHosts(targets, discovered []string) []string {
+	all := append(append([]string{}, targets...), discovered...)
+	seen := make(map[string]bool, len(all))
+	out := make([]string, 0, len(all))
+	for _, h := range all {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h == "" || seen[h] {
+			continue
+		}
+		seen[h] = true
+		out = append(out, h)
 	}
 	return out
 }

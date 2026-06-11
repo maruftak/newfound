@@ -115,3 +115,48 @@ func TestPipelineExcludesAndFiltersPriority(t *testing.T) {
 		t.Fatalf("high min_priority should filter low NEW_TECH and excluded host, got %+v", r2.Changes)
 	}
 }
+
+func TestPipelineDropsIPChangeUnlessTracked(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "p.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	cfg := &config.Config{Name: "prog", Targets: []string{"a.example.com"}, MinPriority: "low"}
+
+	ip := "1.1.1.1"
+	discover := func(_ context.Context, _ []string) ([]string, error) { return nil, nil }
+	probe := func(_ context.Context, h []string) ([]model.Asset, error) {
+		out := make([]model.Asset, 0, len(h))
+		for _, x := range h {
+			out = append(out, model.Asset{Host: x, Alive: true, Status: 200, IP: ip})
+		}
+		return out, nil
+	}
+	p := &Pipeline{Store: st, Discover: discover, Probe: probe}
+	if _, err := p.Run(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	// IP rotates — must be dropped by default (CDN noise).
+	ip = "2.2.2.2"
+	r2, err := p.Run(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r2.Changes) != 0 {
+		t.Fatalf("IP_CHANGE should be suppressed by default, got %+v", r2.Changes)
+	}
+
+	// With tracking enabled, the change surfaces.
+	cfg.TrackIP = true
+	ip = "3.3.3.3"
+	r3, err := p.Run(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r3.Changes) != 1 || r3.Changes[0].Kind != diff.IPChange {
+		t.Fatalf("with track_ip enabled, expected one IP_CHANGE, got %+v", r3.Changes)
+	}
+}

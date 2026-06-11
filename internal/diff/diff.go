@@ -33,7 +33,7 @@ var defaultPriority = map[Kind]int{
 	NewHost:      High,
 	HostLive:     High,
 	StatusChange: Medium,
-	IPChange:     Medium,
+	IPChange:     Low,
 	NewTech:      Low,
 	HostGone:     Low,
 }

@@ -33,6 +33,14 @@ func TestParseHttpxTechnologiesField(t *testing.T) {
 	}
 }
 
+func TestParseHttpxPrefersHostIP(t *testing.T) {
+	line := `{"input":"x.example.com","status_code":200,"host_ip":"9.9.9.9","a":["2.2.2.2","1.1.1.1"]}`
+	got := parseHttpx([]byte(line))
+	if len(got) != 1 || got[0].IP != "9.9.9.9" {
+		t.Fatalf("should prefer stable host_ip, got %+v", got)
+	}
+}
+
 func TestCleanHost(t *testing.T) {
 	cases := map[string]string{
 		"https://a.com/app": "a.com",

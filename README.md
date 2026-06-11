@@ -95,7 +95,7 @@ SQLite file (`newfound.db` by default; override with `--db`).
 | `NEW_HOST`      | high     | a subdomain that wasn't there before      |
 | `HOST_LIVE`     | high     | a known host that just started responding |
 | `STATUS_CHANGE` | medium   | HTTP status code changed                  |
-| `IP_CHANGE`     | medium   | resolved IP changed                       |
+| `IP_CHANGE`     | low      | resolved IP changed (opt-in via `track_ip`; off by default — noisy on CDNs) |
 | `NEW_TECH`      | low      | a new technology fingerprint              |
 | `HOST_GONE`     | low      | a host stopped resolving/responding       |
 
