@@ -54,7 +54,7 @@ func TestParseErrors(t *testing.T) {
 		"scheme target": "name: x\ntargets: [\"https://a.com\"]",
 		"path target":   "name: x\ntargets: [\"a.com/app\"]",
 		"bad priority":  "name: x\ntargets: [a.com]\nmin_priority: urgent",
-		"bad notify url": "name: x\ntargets: [a.com]\nnotify:\n  slack: [\"not-a-url\"]",
+		"notify url":    "name: x\ntargets: [a.com]\nnotify:\n  slack: [\"not-a-url\"]",
 	}
 	for name, y := range cases {
 		if _, err := Parse([]byte(y)); err == nil {
