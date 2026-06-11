@@ -16,9 +16,16 @@ import (
 // destination URLs rendered in that platform's format, so a single scope can
 // fan out to a generic endpoint, Slack, and Discord at the same time.
 type Notify struct {
-	Webhooks []string `yaml:"webhooks"` // generic JSON POST
-	Slack    []string `yaml:"slack"`    // Slack incoming-webhook URLs
-	Discord  []string `yaml:"discord"`  // Discord webhook URLs
+	Webhooks []string         `yaml:"webhooks"` // generic JSON POST
+	Slack    []string         `yaml:"slack"`    // Slack incoming-webhook URLs
+	Discord  []string         `yaml:"discord"`  // Discord webhook URLs
+	Telegram []TelegramTarget `yaml:"telegram"` // Telegram bot + chat destinations
+}
+
+// TelegramTarget is a Telegram bot token and the chat it posts to.
+type TelegramTarget struct {
+	Token  string `yaml:"token"`
+	ChatID string `yaml:"chat_id"`
 }
 
 // Endpoints returns every configured destination URL.
@@ -132,6 +139,11 @@ func (c *Config) validate() error {
 	for _, u := range c.Notify.Endpoints() {
 		if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
 			return fmt.Errorf("config: notify URL %q must start with http:// or https://", u)
+		}
+	}
+	for _, tg := range c.Notify.Telegram {
+		if strings.TrimSpace(tg.Token) == "" || strings.TrimSpace(tg.ChatID) == "" {
+			return fmt.Errorf("config: telegram entry needs both token and chat_id")
 		}
 	}
 	return nil

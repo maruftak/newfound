@@ -83,6 +83,9 @@ notify:
     - https://hooks.slack.com/services/XXX/YYY/ZZZ
   discord: []
   webhooks: []                # generic JSON POST
+  telegram:                   # Telegram Bot API (sendMessage)
+    - token: "123456:ABC-DEF"
+      chat_id: "987654321"
 ```
 
 2. Record a baseline, then monitor:

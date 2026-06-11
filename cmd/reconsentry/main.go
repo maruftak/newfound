@@ -121,6 +121,9 @@ func cmdRun(args []string) int {
 			add(cfg.Notify.Webhooks, "generic")
 			add(cfg.Notify.Slack, "slack")
 			add(cfg.Notify.Discord, "discord")
+			for _, tg := range cfg.Notify.Telegram {
+				notifiers = append(notifiers, notify.NewTelegram(tg.Token, tg.ChatID))
+			}
 		}
 		jobs = append(jobs, job{
 			cfg: cfg,
