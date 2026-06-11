@@ -100,6 +100,38 @@ func (s *Store) assetsForRun(runID int64) ([]model.Asset, error) {
 	return out, rows.Err()
 }
 
+// RunInfo summarizes a single stored run.
+type RunInfo struct {
+	ID        int64     `json:"run_id"`
+	StartedAt time.Time `json:"started_at"`
+	Assets    int       `json:"asset_count"`
+}
+
+// Runs returns metadata for every run of scope, most recent first, so the
+// monitoring history is queryable without re-probing.
+func (s *Store) Runs(scope string) ([]RunInfo, error) {
+	rows, err := s.db.Query(
+		`SELECT r.id, r.started_at, COUNT(a.run_id)
+		   FROM runs r LEFT JOIN assets a ON a.run_id = r.id
+		  WHERE r.scope = ?
+		  GROUP BY r.id, r.started_at
+		  ORDER BY r.id DESC`, scope)
+	if err != nil {
+		return nil, fmt.Errorf("query runs: %w", err)
+	}
+	defer rows.Close()
+
+	var out []RunInfo
+	for rows.Next() {
+		var ri RunInfo
+		if err := rows.Scan(&ri.ID, &ri.StartedAt, &ri.Assets); err != nil {
+			return nil, fmt.Errorf("scan run: %w", err)
+		}
+		out = append(out, ri)
+	}
+	return out, rows.Err()
+}
+
 // SaveRun persists a run and its assets atomically, returning the new run id.
 func (s *Store) SaveRun(scope string, at time.Time, assets []model.Asset) (int64, error) {
 	tx, err := s.db.Begin()

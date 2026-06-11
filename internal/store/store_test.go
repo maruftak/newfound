@@ -65,3 +65,40 @@ func TestSaveAndLatest(t *testing.T) {
 		t.Errorf("scope2 should be empty, got %+v", other)
 	}
 }
+
+func TestRuns(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "r.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	if runs, _ := st.Runs("s"); len(runs) != 0 {
+		t.Fatalf("empty scope should have no runs, got %d", len(runs))
+	}
+
+	t0 := time.Now()
+	if _, err := st.SaveRun("s", t0, []model.Asset{{Host: "a.example.com"}, {Host: "b.example.com"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SaveRun("s", t0.Add(time.Hour), []model.Asset{{Host: "a.example.com"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	runs, err := st.Runs("s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("want 2 runs, got %d", len(runs))
+	}
+	if runs[0].ID < runs[1].ID {
+		t.Errorf("runs should be newest-first, got ids %d then %d", runs[0].ID, runs[1].ID)
+	}
+	if runs[0].Assets != 1 || runs[1].Assets != 2 {
+		t.Errorf("asset counts wrong: got %d, %d (want 1, 2)", runs[0].Assets, runs[1].Assets)
+	}
+	if runs[1].StartedAt.IsZero() {
+		t.Errorf("started_at should round-trip from the db, got zero time")
+	}
+}
