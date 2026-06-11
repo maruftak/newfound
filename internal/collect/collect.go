@@ -48,7 +48,7 @@ func parseLines(b []byte) []string {
 	sc := bufio.NewScanner(bytes.NewReader(b))
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
-		h := strings.ToLower(strings.TrimSpace(sc.Text()))
+		h := strings.ToLower(model.TrimInvisible(sc.Text()))
 		if h == "" || seen[h] {
 			continue
 		}
@@ -144,7 +144,7 @@ func hostFromURL(raw string) string {
 }
 
 func cleanHost(h string) string {
-	h = strings.ToLower(strings.TrimSpace(h))
+	h = strings.ToLower(model.TrimInvisible(h))
 	h = strings.TrimPrefix(h, "http://")
 	h = strings.TrimPrefix(h, "https://")
 	if i := strings.IndexByte(h, '/'); i >= 0 {

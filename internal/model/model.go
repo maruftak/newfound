@@ -25,6 +25,14 @@ func (a Asset) TechString() string {
 	return strings.Join(a.Tech, ", ")
 }
 
+// TrimInvisible strips a UTF-8 BOM (U+FEFF) and surrounding whitespace. A BOM
+// survives strings.TrimSpace (U+FEFF is not Unicode whitespace), so hosts read
+// from editor-saved config files or shell pipes must be cleaned explicitly —
+// otherwise a single invisible byte corrupts every subfinder/httpx call.
+func TrimInvisible(s string) string {
+	return strings.TrimSpace(strings.ReplaceAll(s, "\ufeff", ""))
+}
+
 // NormalizeTech returns a sorted copy of t for stable comparison and output.
 func NormalizeTech(t []string) []string {
 	if len(t) == 0 {
