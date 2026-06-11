@@ -69,6 +69,7 @@ run flags:
   --db string       path to sqlite database (default "reconsentry.db")
   --interval dur    if set (e.g. 6h), monitor continuously on this interval
   --timeout dur     max duration for a single run cycle (default 10m; 0 = no limit)
+  --keep int        retain only the most recent N snapshots per scope (0 = keep all)
   --dry-run         print changes; do not send notifications
   --json            emit results as JSON (one object per cycle) for piping
 
@@ -82,6 +83,7 @@ func cmdRun(args []string) int {
 	dbPath := fs.String("db", "reconsentry.db", "path to sqlite database")
 	interval := fs.Duration("interval", 0, "continuous run interval (e.g. 6h); 0 = run once")
 	timeout := fs.Duration("timeout", 10*time.Minute, "max duration for a single run cycle (0 = no limit)")
+	keep := fs.Int("keep", 0, "retain only the most recent N snapshots per scope (0 = keep all)")
 	dryRun := fs.Bool("dry-run", false, "print changes; do not notify")
 	jsonOut := fs.Bool("json", false, "emit run results as JSON (one object per cycle)")
 	_ = fs.Parse(args)
@@ -127,6 +129,7 @@ func cmdRun(args []string) int {
 				Discover:  collect.Subfinder,
 				Probe:     collect.Httpx,
 				Notifiers: notifiers,
+				Keep:      *keep,
 			},
 		})
 	}

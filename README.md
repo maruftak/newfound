@@ -106,6 +106,7 @@ reconsentry run --config scope.yaml --interval 6h
 | `--db`       | `reconsentry.db` | SQLite snapshot database                          |
 | `--interval` | `0` (run once)   | monitor continuously on this interval (e.g. `6h`) |
 | `--timeout`  | `10m`            | max duration per run cycle (`0` = no limit)       |
+| `--keep`     | `0` (keep all)   | retain only the most recent N snapshots per scope |
 | `--dry-run`  | `false`          | print changes without sending notifications       |
 | `--json`     | `false`          | emit results as JSON (one object per cycle)       |
 
