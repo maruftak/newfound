@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Multi-scope configs: a file may declare several scopes under a top-level
+  `scopes:` list, and `run` monitors them all in one process (each isolated in
+  the database). `assets` / `history` take `--scope <name>` to select one.
+  Single-scope files keep working unchanged.
 - `reconsentry assets --config scope.yaml [--json]` prints the latest captured
   snapshot (host, liveness, status, IP, tech) straight from the database — no
   re-probing — so the recorded surface is queryable, not a black box.

@@ -58,9 +58,11 @@ func usage() {
 usage:
   reconsentry init [path]              write a starter scope file (default scope.yaml)
   reconsentry run --config scope.yaml [flags]
-  reconsentry assets --config scope.yaml [--db ...] [--json]   show the latest snapshot
-  reconsentry history --config scope.yaml [--db ...] [--json]  list past runs
+  reconsentry assets --config scope.yaml [--scope name] [--json]   show the latest snapshot
+  reconsentry history --config scope.yaml [--scope name] [--json]  list past runs
   reconsentry version
+
+A scope file holds one scope, or many under a top-level "scopes:" list.
 
 run flags:
   --config string   path to scope config (required)
@@ -88,7 +90,7 @@ func cmdRun(args []string) int {
 		fmt.Fprintln(os.Stderr, "error: --config is required")
 		return 2
 	}
-	cfg, err := config.Load(*cfgPath)
+	scopes, err := config.LoadAll(*cfgPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1
@@ -100,46 +102,67 @@ func cmdRun(args []string) int {
 	}
 	defer st.Close()
 
-	var notifiers []notify.Notifier
-	if !*dryRun {
-		add := func(urls []string, format string) {
-			for _, u := range urls {
-				notifiers = append(notifiers, notify.NewWebhook(u, format))
+	// Build a pipeline per scope so each carries its own notifiers.
+	type job struct {
+		cfg  *config.Config
+		pipe *runner.Pipeline
+	}
+	jobs := make([]job, 0, len(scopes))
+	for _, cfg := range scopes {
+		var notifiers []notify.Notifier
+		if !*dryRun {
+			add := func(urls []string, format string) {
+				for _, u := range urls {
+					notifiers = append(notifiers, notify.NewWebhook(u, format))
+				}
 			}
+			add(cfg.Notify.Webhooks, "generic")
+			add(cfg.Notify.Slack, "slack")
+			add(cfg.Notify.Discord, "discord")
 		}
-		add(cfg.Notify.Webhooks, "generic")
-		add(cfg.Notify.Slack, "slack")
-		add(cfg.Notify.Discord, "discord")
+		jobs = append(jobs, job{
+			cfg: cfg,
+			pipe: &runner.Pipeline{
+				Store:     st,
+				Discover:  collect.Subfinder,
+				Probe:     collect.Httpx,
+				Notifiers: notifiers,
+			},
+		})
 	}
-
-	p := &runner.Pipeline{
-		Store:     st,
-		Discover:  collect.Subfinder,
-		Probe:     collect.Httpx,
-		Notifiers: notifiers,
-	}
+	multi := len(jobs) > 1
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// runOnce runs every scope once and reports whether all succeeded.
 	runOnce := func() bool {
-		runCtx := ctx
-		if *timeout > 0 {
+		ok := true
+		for _, j := range jobs {
+			runCtx := ctx
 			var cancel context.CancelFunc
-			runCtx, cancel = context.WithTimeout(ctx, *timeout)
-			defer cancel()
+			if *timeout > 0 {
+				runCtx, cancel = context.WithTimeout(ctx, *timeout)
+			}
+			res, err := j.pipe.Run(runCtx, j.cfg)
+			if cancel != nil {
+				cancel()
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "run error [%s]: %v\n", j.cfg.Name, err)
+				ok = false
+				continue
+			}
+			if *jsonOut {
+				printJSON(j.cfg.Name, res)
+			} else {
+				if multi {
+					fmt.Printf("== %s ==\n", j.cfg.Name)
+				}
+				printResult(res)
+			}
 		}
-		res, err := p.Run(runCtx, cfg)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "run error: %v\n", err)
-			return false
-		}
-		if *jsonOut {
-			printJSON(cfg.Name, res)
-		} else {
-			printResult(res)
-		}
-		return true
+		return ok
 	}
 
 	if *interval <= 0 {
@@ -150,7 +173,7 @@ func cmdRun(args []string) int {
 	}
 
 	if !*jsonOut {
-		fmt.Printf("reconsentry: monitoring %q every %s (ctrl-c to stop)\n", cfg.Name, *interval)
+		fmt.Printf("reconsentry: monitoring %d scope(s) every %s (ctrl-c to stop)\n", len(jobs), *interval)
 	}
 	runOnce()
 	t := time.NewTicker(*interval)
@@ -185,10 +208,31 @@ func cmdInit(args []string) int {
 	return 0
 }
 
+// pickScope selects a scope by name, or the only scope when name is empty.
+func pickScope(scopes []*config.Config, name string) (*config.Config, error) {
+	if name != "" {
+		for _, c := range scopes {
+			if c.Name == name {
+				return c, nil
+			}
+		}
+		return nil, fmt.Errorf("scope %q not found in config", name)
+	}
+	if len(scopes) == 1 {
+		return scopes[0], nil
+	}
+	names := make([]string, len(scopes))
+	for i, c := range scopes {
+		names[i] = c.Name
+	}
+	return nil, fmt.Errorf("config has %d scopes (%s); pass --scope to choose", len(scopes), strings.Join(names, ", "))
+}
+
 func cmdAssets(args []string) int {
 	fs := flag.NewFlagSet("assets", flag.ExitOnError)
 	cfgPath := fs.String("config", "", "path to scope config (required)")
 	dbPath := fs.String("db", "reconsentry.db", "path to sqlite database")
+	scopeName := fs.String("scope", "", "scope name (required if the config has multiple)")
 	jsonOut := fs.Bool("json", false, "emit assets as JSON")
 	_ = fs.Parse(args)
 
@@ -196,7 +240,12 @@ func cmdAssets(args []string) int {
 		fmt.Fprintln(os.Stderr, "error: --config is required")
 		return 2
 	}
-	cfg, err := config.Load(*cfgPath)
+	scopes, err := config.LoadAll(*cfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	cfg, err := pickScope(scopes, *scopeName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1
@@ -252,6 +301,7 @@ func cmdHistory(args []string) int {
 	fs := flag.NewFlagSet("history", flag.ExitOnError)
 	cfgPath := fs.String("config", "", "path to scope config (required)")
 	dbPath := fs.String("db", "reconsentry.db", "path to sqlite database")
+	scopeName := fs.String("scope", "", "scope name (required if the config has multiple)")
 	jsonOut := fs.Bool("json", false, "emit history as JSON")
 	_ = fs.Parse(args)
 
@@ -259,7 +309,12 @@ func cmdHistory(args []string) int {
 		fmt.Fprintln(os.Stderr, "error: --config is required")
 		return 2
 	}
-	cfg, err := config.Load(*cfgPath)
+	scopes, err := config.LoadAll(*cfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	cfg, err := pickScope(scopes, *scopeName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1
