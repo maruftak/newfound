@@ -25,3 +25,4 @@ notify:
   webhooks: []   # generic JSON POST to any endpoint
   slack: []      # e.g. https://hooks.slack.com/services/XXX/YYY/ZZZ
   discord: []    # e.g. https://discord.com/api/webhooks/XXX/YYY
+  telegram: []   # e.g. - { token: "123:ABC", chat_id: "987" }

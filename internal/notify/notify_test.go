@@ -73,6 +73,41 @@ func TestWebhookRetriesTransientThenSucceeds(t *testing.T) {
 	}
 }
 
+func TestTelegramSendsMessage(t *testing.T) {
+	var gotPath string
+	var body map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &body)
+		rw.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	tg := NewTelegram("123:ABC", "987")
+	tg.BaseURL = srv.URL
+	if err := tg.Notify(context.Background(), "prog", sampleChanges()); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/bot123:ABC/sendMessage" {
+		t.Errorf("unexpected request path: %q", gotPath)
+	}
+	if body["chat_id"] != "987" {
+		t.Errorf("chat_id should be sent, got %q", body["chat_id"])
+	}
+	if !strings.Contains(body["text"], "NEW_HOST") {
+		t.Errorf("text should carry the change, got %q", body["text"])
+	}
+}
+
+func TestTelegramEmptyIsNoop(t *testing.T) {
+	tg := NewTelegram("t", "c")
+	tg.BaseURL = "http://127.0.0.1:0"
+	if err := tg.Notify(context.Background(), "prog", nil); err != nil {
+		t.Errorf("empty changes should be a no-op, got %v", err)
+	}
+}
+
 func TestWebhookDoesNotRetryClientError(t *testing.T) {
 	var attempts int32
 	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {

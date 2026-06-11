@@ -48,10 +48,14 @@ func (w *Webhook) Notify(ctx context.Context, scope string, changes []diff.Chang
 	if err != nil {
 		return fmt.Errorf("build payload: %w", err)
 	}
+	return deliver(ctx, w.Client, w.URL, body)
+}
 
+// deliver posts a JSON body to url with bounded retries on transient failures.
+func deliver(ctx context.Context, client *http.Client, url string, body []byte) error {
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		lastErr = w.post(ctx, body)
+		lastErr = postOnce(ctx, client, url, body)
 		if lastErr == nil {
 			return nil
 		}
@@ -67,16 +71,16 @@ func (w *Webhook) Notify(ctx context.Context, scope string, changes []diff.Chang
 	return lastErr
 }
 
-// post performs a single delivery attempt.
-func (w *Webhook) post(ctx context.Context, body []byte) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(body))
+// postOnce performs a single JSON POST.
+func postOnce(ctx context.Context, client *http.Client, url string, body []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := w.Client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("post webhook: %w", err)
+		return fmt.Errorf("post: %w", err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body) // drain so the connection can be reused
@@ -114,6 +118,44 @@ func (w *Webhook) payload(scope string, changes []diff.Change) ([]byte, error) {
 			"changes": changes,
 		})
 	}
+}
+
+// Telegram delivers alerts via the Telegram Bot API (sendMessage).
+type Telegram struct {
+	Token   string
+	ChatID  string
+	BaseURL string // defaults to https://api.telegram.org; overridable for tests
+	Client  *http.Client
+}
+
+// NewTelegram builds a Telegram notifier for a bot token and chat id.
+func NewTelegram(token, chatID string) *Telegram {
+	return &Telegram{
+		Token:   token,
+		ChatID:  chatID,
+		BaseURL: "https://api.telegram.org",
+		Client:  &http.Client{Timeout: 15 * time.Second},
+	}
+}
+
+// Notify sends the changes as a Telegram message. It is a no-op when there are
+// no changes.
+func (t *Telegram) Notify(ctx context.Context, scope string, changes []diff.Change) error {
+	if len(changes) == 0 {
+		return nil
+	}
+	body, err := json.Marshal(map[string]string{
+		"chat_id": t.ChatID,
+		"text":    RenderText(scope, changes),
+	})
+	if err != nil {
+		return fmt.Errorf("build payload: %w", err)
+	}
+	base := t.BaseURL
+	if base == "" {
+		base = "https://api.telegram.org"
+	}
+	return deliver(ctx, t.Client, base+"/bot"+t.Token+"/sendMessage", body)
 }
 
 // RenderText builds a human-readable multi-line summary of the changes,

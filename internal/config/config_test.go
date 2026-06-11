@@ -123,3 +123,21 @@ func TestParseRejectsMultiScope(t *testing.T) {
 		t.Error("single-scope Parse should reject a multi-scope file")
 	}
 }
+
+func TestParseTelegram(t *testing.T) {
+	y := []byte("name: x\ntargets: [a.com]\nnotify:\n  telegram:\n    - token: \"123:ABC\"\n      chat_id: \"987\"\n")
+	c, err := Parse(y)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Notify.Telegram) != 1 || c.Notify.Telegram[0].ChatID != "987" {
+		t.Fatalf("telegram not parsed: %+v", c.Notify.Telegram)
+	}
+}
+
+func TestParseTelegramRequiresChatID(t *testing.T) {
+	y := []byte("name: x\ntargets: [a.com]\nnotify:\n  telegram:\n    - token: t\n")
+	if _, err := Parse(y); err == nil {
+		t.Error("telegram entry without chat_id should error")
+	}
+}

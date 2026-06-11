@@ -7,6 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Telegram notifier: add `notify.telegram` entries (`token` + `chat_id`) to
+  alert via the Telegram Bot API. Delivery shares the same retry/backoff as the
+  webhook notifiers.
 - `run --keep N` prunes old snapshots, retaining only the most recent N per
   scope, so the database stays bounded over months of continuous monitoring
   (default 0 = keep everything).
