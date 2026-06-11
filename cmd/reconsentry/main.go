@@ -39,6 +39,8 @@ func main() {
 		os.Exit(cmdInit(os.Args[2:]))
 	case "assets":
 		os.Exit(cmdAssets(os.Args[2:]))
+	case "history":
+		os.Exit(cmdHistory(os.Args[2:]))
 	case "version", "-v", "--version":
 		fmt.Printf("reconsentry %s\n", version)
 	case "help", "-h", "--help":
@@ -57,6 +59,7 @@ usage:
   reconsentry init [path]              write a starter scope file (default scope.yaml)
   reconsentry run --config scope.yaml [flags]
   reconsentry assets --config scope.yaml [--db ...] [--json]   show the latest snapshot
+  reconsentry history --config scope.yaml [--db ...] [--json]  list past runs
   reconsentry version
 
 run flags:
@@ -241,6 +244,56 @@ func cmdAssets(args []string) int {
 			fmt.Printf("  [%s]", a.TechString())
 		}
 		fmt.Println()
+	}
+	return 0
+}
+
+func cmdHistory(args []string) int {
+	fs := flag.NewFlagSet("history", flag.ExitOnError)
+	cfgPath := fs.String("config", "", "path to scope config (required)")
+	dbPath := fs.String("db", "reconsentry.db", "path to sqlite database")
+	jsonOut := fs.Bool("json", false, "emit history as JSON")
+	_ = fs.Parse(args)
+
+	if *cfgPath == "" {
+		fmt.Fprintln(os.Stderr, "error: --config is required")
+		return 2
+	}
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	st, err := store.Open(*dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	defer st.Close()
+
+	runs, err := st.Runs(cfg.Name)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+
+	if *jsonOut {
+		b, err := json.MarshalIndent(runs, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "json error: %v\n", err)
+			return 1
+		}
+		fmt.Println(string(b))
+		return 0
+	}
+
+	if len(runs) == 0 {
+		fmt.Printf("no runs recorded for %q yet — run: reconsentry run --config %s\n", cfg.Name, *cfgPath)
+		return 0
+	}
+	fmt.Printf("%d run(s) for %s (most recent first):\n", len(runs), cfg.Name)
+	for _, r := range runs {
+		fmt.Printf("  #%-5d %s  %d asset(s)\n", r.ID, r.StartedAt.Format("2006-01-02 15:04:05"), r.Assets)
 	}
 	return 0
 }

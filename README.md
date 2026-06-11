@@ -129,6 +129,16 @@ reconsentry assets --config scope.yaml
 reconsentry assets --config scope.yaml --json | jq '.[] | select(.alive)'
 ```
 
+And `history` lists past runs, so you can see the monitoring cadence and how the
+surface size moved over time:
+
+```bash
+reconsentry history --config scope.yaml
+# 2 run(s) for my-program (most recent first):
+#   #2     2026-06-11 22:25:16  7 asset(s)
+#   #1     2026-06-10 22:25:11  5 asset(s)
+```
+
 ## What it detects
 
 | Change          | Priority | Meaning                                   |
