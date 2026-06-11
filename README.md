@@ -116,6 +116,19 @@ reconsentry run --config scope.yaml --json \
   | jq '.changes[] | select(.priority >= 3) | "\(.kind) \(.host)"'
 ```
 
+### Inspect the current surface
+
+`run` reports *changes*; `assets` shows the *latest snapshot* straight from the
+database, no re-probing — so your recorded surface isn't a black box:
+
+```bash
+reconsentry assets --config scope.yaml
+# 1 asset(s) for my-program (latest snapshot):
+#   app.example.com   live 200  93.184.216.34   [HSTS, Next.js, Vercel]
+
+reconsentry assets --config scope.yaml --json | jq '.[] | select(.alive)'
+```
+
 ## What it detects
 
 | Change          | Priority | Meaning                                   |

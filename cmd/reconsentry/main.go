@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -35,6 +37,8 @@ func main() {
 		os.Exit(cmdRun(os.Args[2:]))
 	case "init":
 		os.Exit(cmdInit(os.Args[2:]))
+	case "assets":
+		os.Exit(cmdAssets(os.Args[2:]))
 	case "version", "-v", "--version":
 		fmt.Printf("reconsentry %s\n", version)
 	case "help", "-h", "--help":
@@ -52,6 +56,7 @@ func usage() {
 usage:
   reconsentry init [path]              write a starter scope file (default scope.yaml)
   reconsentry run --config scope.yaml [flags]
+  reconsentry assets --config scope.yaml [--db ...] [--json]   show the latest snapshot
   reconsentry version
 
 run flags:
@@ -174,6 +179,69 @@ func cmdInit(args []string) int {
 		return 1
 	}
 	fmt.Printf("wrote %s — edit your targets, then run: reconsentry run --config %s\n", path, path)
+	return 0
+}
+
+func cmdAssets(args []string) int {
+	fs := flag.NewFlagSet("assets", flag.ExitOnError)
+	cfgPath := fs.String("config", "", "path to scope config (required)")
+	dbPath := fs.String("db", "reconsentry.db", "path to sqlite database")
+	jsonOut := fs.Bool("json", false, "emit assets as JSON")
+	_ = fs.Parse(args)
+
+	if *cfgPath == "" {
+		fmt.Fprintln(os.Stderr, "error: --config is required")
+		return 2
+	}
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	st, err := store.Open(*dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	defer st.Close()
+
+	assets, err := st.LatestAssets(cfg.Name)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	sort.Slice(assets, func(i, j int) bool { return assets[i].Host < assets[j].Host })
+
+	if *jsonOut {
+		b, err := json.MarshalIndent(assets, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "json error: %v\n", err)
+			return 1
+		}
+		fmt.Println(string(b))
+		return 0
+	}
+
+	if len(assets) == 0 {
+		fmt.Printf("no assets recorded for %q yet — run: reconsentry run --config %s\n", cfg.Name, *cfgPath)
+		return 0
+	}
+	fmt.Printf("%d asset(s) for %s (latest snapshot):\n", len(assets), cfg.Name)
+	for _, a := range assets {
+		status := "-"
+		if a.Status != 0 {
+			status = strconv.Itoa(a.Status)
+		}
+		state := "down"
+		if a.Alive {
+			state = "live"
+		}
+		fmt.Printf("  %-40s %-4s %-4s %-15s", a.Host, state, status, a.IP)
+		if len(a.Tech) > 0 {
+			fmt.Printf("  [%s]", a.TechString())
+		}
+		fmt.Println()
+	}
 	return 0
 }
 
