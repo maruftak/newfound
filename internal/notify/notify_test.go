@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maruftak/newfound/internal/diff"
+	"github.com/maruftak/reconsentry/internal/diff"
 )
 
 func sampleChanges() []diff.Change {

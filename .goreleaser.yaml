@@ -5,8 +5,8 @@ before:
     - go mod tidy
 
 builds:
-  - main: ./cmd/newfound
-    binary: newfound
+  - main: ./cmd/reconsentry
+    binary: reconsentry
     env:
       - CGO_ENABLED=0
     goos: [linux, darwin, windows]

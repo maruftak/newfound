@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maruftak/newfound/internal/diff"
+	"github.com/maruftak/reconsentry/internal/diff"
 )
 
 // Notifier delivers a batch of changes for a scope.
@@ -76,7 +76,7 @@ func (w *Webhook) payload(scope string, changes []diff.Change) ([]byte, error) {
 // RenderText builds a human-readable multi-line summary of the changes.
 func RenderText(scope string, changes []diff.Change) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "newfound: %d change(s) on %s", len(changes), scope)
+	fmt.Fprintf(&b, "reconsentry: %d change(s) on %s", len(changes), scope)
 	for _, c := range changes {
 		fmt.Fprintf(&b, "\n• [%s] %s — %s", c.Kind, c.Host, c.Detail)
 	}

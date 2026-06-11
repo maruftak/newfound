@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/maruftak/newfound/internal/model"
+	"github.com/maruftak/reconsentry/internal/model"
 )
 
 // Kind identifies a category of change.

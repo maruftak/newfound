@@ -1,4 +1,4 @@
-// Command newfound is a continuous attack-surface change monitor: it watches
+// Command reconsentry is a continuous attack-surface change monitor: it watches
 // authorized targets and alerts when a new subdomain, live host, or technology
 // appears.
 package main
@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/maruftak/newfound/internal/collect"
-	"github.com/maruftak/newfound/internal/config"
-	"github.com/maruftak/newfound/internal/notify"
-	"github.com/maruftak/newfound/internal/runner"
-	"github.com/maruftak/newfound/internal/store"
+	"github.com/maruftak/reconsentry/internal/collect"
+	"github.com/maruftak/reconsentry/internal/config"
+	"github.com/maruftak/reconsentry/internal/notify"
+	"github.com/maruftak/reconsentry/internal/runner"
+	"github.com/maruftak/reconsentry/internal/store"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -31,7 +31,7 @@ func main() {
 	case "run":
 		os.Exit(cmdRun(os.Args[2:]))
 	case "version", "-v", "--version":
-		fmt.Printf("newfound %s\n", version)
+		fmt.Printf("reconsentry %s\n", version)
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -42,15 +42,15 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `newfound — attack-surface change monitor
+	fmt.Fprint(os.Stderr, `reconsentry — attack-surface change monitor
 
 usage:
-  newfound run --config scope.yaml [flags]
-  newfound version
+  reconsentry run --config scope.yaml [flags]
+  reconsentry version
 
 run flags:
   --config string   path to scope config (required)
-  --db string       path to sqlite database (default "newfound.db")
+  --db string       path to sqlite database (default "reconsentry.db")
   --interval dur    if set (e.g. 6h), monitor continuously on this interval
   --dry-run         print changes; do not send notifications
 
@@ -61,7 +61,7 @@ Only monitor targets you are authorized to test.
 func cmdRun(args []string) int {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	cfgPath := fs.String("config", "", "path to scope config (required)")
-	dbPath := fs.String("db", "newfound.db", "path to sqlite database")
+	dbPath := fs.String("db", "reconsentry.db", "path to sqlite database")
 	interval := fs.Duration("interval", 0, "continuous run interval (e.g. 6h); 0 = run once")
 	dryRun := fs.Bool("dry-run", false, "print changes; do not notify")
 	_ = fs.Parse(args)
@@ -123,14 +123,14 @@ func cmdRun(args []string) int {
 		return 0
 	}
 
-	fmt.Printf("newfound: monitoring %q every %s (ctrl-c to stop)\n", cfg.Name, *interval)
+	fmt.Printf("reconsentry: monitoring %q every %s (ctrl-c to stop)\n", cfg.Name, *interval)
 	runOnce()
 	t := time.NewTicker(*interval)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("newfound: stopped")
+			fmt.Println("reconsentry: stopped")
 			return 0
 		case <-t.C:
 			runOnce()

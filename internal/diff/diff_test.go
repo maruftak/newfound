@@ -3,7 +3,7 @@ package diff
 import (
 	"testing"
 
-	"github.com/maruftak/newfound/internal/model"
+	"github.com/maruftak/reconsentry/internal/model"
 )
 
 func asset(host string, alive bool, status int, ip string, tech ...string) model.Asset {

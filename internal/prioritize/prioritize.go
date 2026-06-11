@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/maruftak/newfound/internal/diff"
+	"github.com/maruftak/reconsentry/internal/diff"
 )
 
 // Level converts a config priority string to a numeric threshold.

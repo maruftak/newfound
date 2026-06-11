@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/maruftak/newfound/internal/model"
+	"github.com/maruftak/reconsentry/internal/model"
 )
 
 // ensure returns a helpful error when a required external tool is missing.

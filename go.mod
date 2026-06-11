@@ -1,4 +1,4 @@
-module github.com/maruftak/newfound
+module github.com/maruftak/reconsentry
 
 go 1.25.0
 

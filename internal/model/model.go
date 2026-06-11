@@ -1,4 +1,4 @@
-// Package model defines the core data types shared across newfound.
+// Package model defines the core data types shared across reconsentry.
 package model
 
 import (

@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maruftak/newfound/internal/config"
-	"github.com/maruftak/newfound/internal/diff"
-	"github.com/maruftak/newfound/internal/model"
-	"github.com/maruftak/newfound/internal/notify"
-	"github.com/maruftak/newfound/internal/prioritize"
-	"github.com/maruftak/newfound/internal/store"
+	"github.com/maruftak/reconsentry/internal/config"
+	"github.com/maruftak/reconsentry/internal/diff"
+	"github.com/maruftak/reconsentry/internal/model"
+	"github.com/maruftak/reconsentry/internal/notify"
+	"github.com/maruftak/reconsentry/internal/prioritize"
+	"github.com/maruftak/reconsentry/internal/store"
 )
 
 // DiscoverFunc finds hosts for the given root targets.

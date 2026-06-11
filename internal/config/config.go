@@ -1,4 +1,4 @@
-// Package config loads and validates a newfound scope file.
+// Package config loads and validates a reconsentry scope file.
 package config
 
 import (

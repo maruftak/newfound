@@ -1,6 +1,6 @@
-# Contributing to newfound
+# Contributing to ReconSentry
 
-Thanks for your interest! `newfound` is young and contributions are very welcome.
+Thanks for your interest! `reconsentry` is young and contributions are very welcome.
 
 ## Development
 
@@ -16,7 +16,7 @@ Please run `gofmt` and `go vet` before opening a PR — CI enforces both.
 ## Project layout
 
 ```
-cmd/newfound        CLI entrypoint
+cmd/reconsentry        CLI entrypoint
 internal/model      shared types (Asset)
 internal/config     scope file parsing + validation
 internal/collect    external-tool collectors (subfinder, httpx) + parsers
@@ -34,7 +34,7 @@ Collectors turn targets/hosts into assets. The pipeline injects two functions
 
 1. Add a thin exec wrapper + a **pure parse function** in `internal/collect`.
 2. Unit-test the parser with representative tool output (no network).
-3. Wire it into the pipeline in `cmd/newfound`.
+3. Wire it into the pipeline in `cmd/reconsentry`.
 
 Keep the exec wrapper thin and put all logic in the testable parse function.
 

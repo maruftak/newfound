@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/maruftak/newfound/internal/config"
-	"github.com/maruftak/newfound/internal/diff"
-	"github.com/maruftak/newfound/internal/model"
-	"github.com/maruftak/newfound/internal/notify"
-	"github.com/maruftak/newfound/internal/store"
+	"github.com/maruftak/reconsentry/internal/config"
+	"github.com/maruftak/reconsentry/internal/diff"
+	"github.com/maruftak/reconsentry/internal/model"
+	"github.com/maruftak/reconsentry/internal/notify"
+	"github.com/maruftak/reconsentry/internal/store"
 )
 
 type fakeNotifier struct{ got [][]diff.Change }

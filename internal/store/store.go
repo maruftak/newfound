@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/maruftak/newfound/internal/model"
+	"github.com/maruftak/reconsentry/internal/model"
 )
 
 // Store is a snapshot database handle.

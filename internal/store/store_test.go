@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maruftak/newfound/internal/model"
+	"github.com/maruftak/reconsentry/internal/model"
 )
 
 func TestSaveAndLatest(t *testing.T) {
