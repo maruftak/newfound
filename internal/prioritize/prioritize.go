@@ -2,7 +2,6 @@
 package prioritize
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/maruftak/reconsentry/internal/diff"
@@ -20,7 +19,8 @@ func Level(s string) int {
 	}
 }
 
-// Filter keeps only changes at or above the minimum priority.
+// Filter keeps only changes at or above the minimum priority. The input order
+// (set by diff.Diff: priority desc, then host) is preserved.
 func Filter(changes []diff.Change, min int) []diff.Change {
 	out := make([]diff.Change, 0, len(changes))
 	for _, c := range changes {
@@ -29,14 +29,4 @@ func Filter(changes []diff.Change, min int) []diff.Change {
 		}
 	}
 	return out
-}
-
-// Sort orders changes by priority (descending) then host.
-func Sort(changes []diff.Change) {
-	sort.SliceStable(changes, func(i, j int) bool {
-		if changes[i].Priority != changes[j].Priority {
-			return changes[i].Priority > changes[j].Priority
-		}
-		return changes[i].Host < changes[j].Host
-	})
 }

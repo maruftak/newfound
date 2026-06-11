@@ -1,5 +1,11 @@
 # ReconSentry
 
+[![CI](https://github.com/maruftak/reconsentry/actions/workflows/ci.yml/badge.svg)](https://github.com/maruftak/reconsentry/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/maruftak/reconsentry)](https://goreportcard.com/report/github.com/maruftak/reconsentry)
+[![Go Reference](https://pkg.go.dev/badge/github.com/maruftak/reconsentry.svg)](https://pkg.go.dev/github.com/maruftak/reconsentry)
+[![Release](https://img.shields.io/github/v/release/maruftak/reconsentry?sort=semver)](https://github.com/maruftak/reconsentry/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Know the moment your target's attack surface changes.**
 
 `reconsentry` is a continuous attack-surface change monitor for bug-bounty hunters and
@@ -57,7 +63,11 @@ go build -o reconsentry ./cmd/reconsentry
 
 ## Quick start
 
-1. Write a scope file (`scope.yaml`):
+1. Scaffold a scope file and edit your targets:
+
+```bash
+reconsentry init            # writes a commented scope.yaml
+```
 
 ```yaml
 name: my-program
@@ -66,10 +76,13 @@ targets:
 exclude:
   - internal.example.com
 min_priority: medium          # low | medium | high
+# Each list is a set of destination URLs rendered in that platform's format,
+# so one scope can alert all three at once.
 notify:
-  webhooks:
+  slack:
     - https://hooks.slack.com/services/XXX/YYY/ZZZ
-  slack: true
+  discord: []
+  webhooks: []                # generic JSON POST
 ```
 
 2. Record a baseline, then monitor:
@@ -85,8 +98,23 @@ reconsentry run --config scope.yaml
 reconsentry run --config scope.yaml --interval 6h
 ```
 
-Use `--dry-run` to print changes without sending notifications. State lives in a local
-SQLite file (`reconsentry.db` by default; override with `--db`).
+### Flags
+
+| Flag         | Default          | Purpose                                           |
+| ------------ | ---------------- | ------------------------------------------------- |
+| `--config`   | _(required)_     | path to the scope file                            |
+| `--db`       | `reconsentry.db` | SQLite snapshot database                          |
+| `--interval` | `0` (run once)   | monitor continuously on this interval (e.g. `6h`) |
+| `--timeout`  | `10m`            | max duration per run cycle (`0` = no limit)       |
+| `--dry-run`  | `false`          | print changes without sending notifications       |
+| `--json`     | `false`          | emit results as JSON (one object per cycle)       |
+
+`--json` makes runs scriptable, e.g. surface only high-priority changes:
+
+```bash
+reconsentry run --config scope.yaml --json \
+  | jq '.changes[] | select(.priority >= 3) | "\(.kind) \(.host)"'
+```
 
 ## What it detects
 
@@ -101,9 +129,12 @@ SQLite file (`reconsentry.db` by default; override with `--db`).
 
 ## Roadmap
 
+- [ ] multiple scopes per config (monitor many programs from one process)
+- [ ] `history` / `assets` commands to query the snapshot DB without re-running
+- [ ] snapshot retention (`--keep N`) so the DB stays bounded over months
+- [ ] Telegram and email notifiers
 - [ ] `katana` collector for endpoint/param change tracking
 - [ ] `--scan-new`: run nuclei against newly-discovered hosts automatically
-- [ ] richer alert formatting and per-change-type routing
 - [ ] passive-only mode (no active probing)
 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Good first issues are
