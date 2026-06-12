@@ -6,6 +6,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `run --max-hosts N` caps how many hosts are probed per cycle (seed targets are
+  always kept), a safety bound so a target with thousands of discovered
+  subdomains can't make `httpx` outrun `--timeout` and fail the whole run. A
+  probe killed by the timeout now reports an actionable hint instead of a bare
+  `signal: killed`. Default `0` = no limit.
+
 ## [0.3.0] - 2026-06-12
 
 ### Added
