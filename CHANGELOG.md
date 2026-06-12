@@ -6,6 +6,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `run --scan-new` runs [nuclei](https://github.com/projectdiscovery/nuclei)
+  against newly-discovered hosts and surfaces results as `VULN_FOUND` changes
+  (priority mapped from severity), so a new asset is reported together with what
+  is exposed on it. Scanning only targets hosts from `NEW_HOST`/`HOST_LIVE`
+  changes, never the whole surface. Closes #11.
+
 ## [0.2.0] - 2026-06-12
 
 ### Added
