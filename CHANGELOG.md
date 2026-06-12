@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-12
+
 ### Added
 - `run --max-hosts N` caps how many hosts are probed per cycle (seed targets are
   always kept), a safety bound so a target with thousands of discovered
