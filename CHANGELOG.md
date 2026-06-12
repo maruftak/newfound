@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-12
+
 ### Added
 - Email (SMTP) notifier: add `notify.email` entries (`smtp_host`, `from`, `to`,
   optional `smtp_port`/`username`/`password`) to receive alerts by email.
