@@ -19,6 +19,7 @@ import (
 	"github.com/maruftak/reconsentry/internal/collect"
 	"github.com/maruftak/reconsentry/internal/config"
 	"github.com/maruftak/reconsentry/internal/diff"
+	"github.com/maruftak/reconsentry/internal/model"
 	"github.com/maruftak/reconsentry/internal/notify"
 	"github.com/maruftak/reconsentry/internal/runner"
 	"github.com/maruftak/reconsentry/internal/store"
@@ -70,6 +71,7 @@ run flags:
   --interval dur    if set (e.g. 6h), monitor continuously on this interval
   --timeout dur     max duration for a single run cycle (default 10m; 0 = no limit)
   --keep int        retain only the most recent N snapshots per scope (0 = keep all)
+  --scan-new        run nuclei against newly-found hosts; findings show as VULN_FOUND
   --dry-run         print changes; do not send notifications
   --json            emit results as JSON (one object per cycle) for piping
 
@@ -84,6 +86,7 @@ func cmdRun(args []string) int {
 	interval := fs.Duration("interval", 0, "continuous run interval (e.g. 6h); 0 = run once")
 	timeout := fs.Duration("timeout", 10*time.Minute, "max duration for a single run cycle (0 = no limit)")
 	keep := fs.Int("keep", 0, "retain only the most recent N snapshots per scope (0 = keep all)")
+	scanNew := fs.Bool("scan-new", false, "run nuclei against newly-found hosts; findings show as VULN_FOUND")
 	dryRun := fs.Bool("dry-run", false, "print changes; do not notify")
 	jsonOut := fs.Bool("json", false, "emit run results as JSON (one object per cycle)")
 	_ = fs.Parse(args)
@@ -128,12 +131,17 @@ func cmdRun(args []string) int {
 				notifiers = append(notifiers, notify.NewEmail(em.SMTPHost, em.SMTPPort, em.Username, em.Password, em.From, em.To))
 			}
 		}
+		var scanner runner.ScanFunc
+		if *scanNew {
+			scanner = collect.Nuclei
+		}
 		jobs = append(jobs, job{
 			cfg: cfg,
 			pipe: &runner.Pipeline{
 				Store:     st,
 				Discover:  collect.Subfinder,
 				Probe:     collect.Httpx,
+				Scanner:   scanner,
 				Notifiers: notifiers,
 				Keep:      *keep,
 			},
@@ -363,6 +371,9 @@ func cmdHistory(args []string) int {
 }
 
 func printResult(res *runner.Result) {
+	if res.ScanErr != nil {
+		fmt.Fprintf(os.Stderr, "scan error: %v\n", res.ScanErr)
+	}
 	for _, e := range res.NotifyErrs {
 		fmt.Fprintf(os.Stderr, "notify error: %v\n", e)
 	}
@@ -382,14 +393,18 @@ func printResult(res *runner.Result) {
 // runJSON is the machine-readable view of a run, stable for piping into other
 // tooling.
 type runJSON struct {
-	Scope      string        `json:"scope"`
-	RunID      int64         `json:"run_id"`
-	FirstRun   bool          `json:"first_run"`
-	AssetCount int           `json:"asset_count"`
-	Changes    []diff.Change `json:"changes"`
+	Scope      string          `json:"scope"`
+	RunID      int64           `json:"run_id"`
+	FirstRun   bool            `json:"first_run"`
+	AssetCount int             `json:"asset_count"`
+	Changes    []diff.Change   `json:"changes"`
+	Findings   []model.Finding `json:"findings,omitempty"`
 }
 
 func printJSON(scope string, res *runner.Result) {
+	if res.ScanErr != nil {
+		fmt.Fprintf(os.Stderr, "scan error: %v\n", res.ScanErr)
+	}
 	for _, e := range res.NotifyErrs {
 		fmt.Fprintf(os.Stderr, "notify error: %v\n", e)
 	}
@@ -399,6 +414,7 @@ func printJSON(scope string, res *runner.Result) {
 		FirstRun:   res.FirstRun,
 		AssetCount: len(res.Assets),
 		Changes:    res.Changes,
+		Findings:   res.Findings,
 	}
 	if out.Changes == nil {
 		out.Changes = []diff.Change{}

@@ -20,6 +20,7 @@ const (
 	IPChange     Kind = "IP_CHANGE"
 	NewTech      Kind = "NEW_TECH"
 	HostGone     Kind = "HOST_GONE"
+	VulnFound    Kind = "VULN_FOUND" // a finding from scanning a newly-discovered host
 )
 
 // Priority levels (higher = more interesting to a hunter).
@@ -36,6 +37,7 @@ var defaultPriority = map[Kind]int{
 	IPChange:     Low,
 	NewTech:      Low,
 	HostGone:     Low,
+	VulnFound:    High, // fallback; runner sets priority per finding severity
 }
 
 // Change is a single classified difference between snapshots.

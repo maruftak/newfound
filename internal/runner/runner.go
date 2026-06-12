@@ -23,11 +23,15 @@ type DiscoverFunc func(ctx context.Context, targets []string) ([]string, error)
 // ProbeFunc enriches hosts with liveness and metadata.
 type ProbeFunc func(ctx context.Context, hosts []string) ([]model.Asset, error)
 
+// ScanFunc scans newly-found hosts for vulnerabilities/exposures.
+type ScanFunc func(ctx context.Context, hosts []string) ([]model.Finding, error)
+
 // Pipeline runs one monitoring cycle.
 type Pipeline struct {
 	Store     *store.Store
 	Discover  DiscoverFunc
 	Probe     ProbeFunc
+	Scanner   ScanFunc // optional; when set, newly-found hosts are scanned (run --scan-new)
 	Notifiers []notify.Notifier
 	Keep      int              // if > 0, retain only the most recent Keep snapshots per scope
 	Now       func() time.Time // injectable clock; defaults to time.Now
@@ -38,8 +42,10 @@ type Result struct {
 	RunID      int64
 	Assets     []model.Asset
 	Changes    []diff.Change
+	Findings   []model.Finding
 	FirstRun   bool
 	NotifyErrs []error
+	ScanErr    error
 }
 
 // Run executes a single monitoring cycle for cfg.
@@ -83,6 +89,17 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 		if !cfg.TrackIP {
 			changes = dropKind(changes, diff.IPChange)
 		}
+		if p.Scanner != nil {
+			if hosts := newlyFoundHosts(changes); len(hosts) > 0 {
+				findings, err := p.Scanner(ctx, hosts)
+				if err != nil {
+					res.ScanErr = err
+				} else {
+					res.Findings = findings
+					changes = append(changes, findingChanges(findings)...)
+				}
+			}
+		}
 		res.Changes = prioritize.Filter(changes, prioritize.Level(cfg.MinPriority))
 	}
 
@@ -113,6 +130,50 @@ func dropKind(changes []diff.Change, k diff.Kind) []diff.Change {
 		}
 	}
 	return out
+}
+
+// newlyFoundHosts returns the hosts from NEW_HOST / HOST_LIVE changes — the
+// hosts worth scanning when --scan-new is set.
+func newlyFoundHosts(changes []diff.Change) []string {
+	seen := make(map[string]bool)
+	var hosts []string
+	for _, c := range changes {
+		if c.Kind != diff.NewHost && c.Kind != diff.HostLive {
+			continue
+		}
+		if c.Host != "" && !seen[c.Host] {
+			seen[c.Host] = true
+			hosts = append(hosts, c.Host)
+		}
+	}
+	return hosts
+}
+
+// findingChanges turns scanner findings into VULN_FOUND changes so they flow
+// through prioritization and notification like any other change.
+func findingChanges(findings []model.Finding) []diff.Change {
+	out := make([]diff.Change, 0, len(findings))
+	for _, f := range findings {
+		out = append(out, diff.Change{
+			Kind:     diff.VulnFound,
+			Host:     f.Host,
+			Detail:   fmt.Sprintf("%s: %s (%s)", strings.ToUpper(f.Severity), f.Name, f.TemplateID),
+			Priority: severityPriority(f.Severity),
+		})
+	}
+	return out
+}
+
+// severityPriority maps a nuclei severity to a change priority.
+func severityPriority(sev string) int {
+	switch strings.ToLower(strings.TrimSpace(sev)) {
+	case "critical", "high":
+		return diff.High
+	case "medium":
+		return diff.Medium
+	default: // low, info, unknown
+		return diff.Low
+	}
 }
 
 // dedupHosts merges seed targets with discovered hosts (targets are always
