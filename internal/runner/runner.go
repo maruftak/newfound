@@ -67,9 +67,16 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 	}
 	hosts := filterExcluded(dedupHosts(cfg.Targets, discovered), cfg)
 
-	probed, err := p.Probe(ctx, hosts)
-	if err != nil {
-		return nil, fmt.Errorf("probe: %w", err)
+	// Passive scopes (scan-forbidding programs) are monitored on discovery
+	// alone: no httpx probe, so hosts are recorded not-alive and the diff is
+	// limited to NEW_HOST / HOST_GONE. Active scanning and crawling are skipped
+	// below for the same reason.
+	var probed []model.Asset
+	if !cfg.Passive {
+		probed, err = p.Probe(ctx, hosts)
+		if err != nil {
+			return nil, fmt.Errorf("probe: %w", err)
+		}
 	}
 	assets := reconcile(hosts, probed, cfg.Targets)
 
@@ -97,7 +104,7 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 		if !cfg.TrackIP {
 			changes = dropKind(changes, diff.IPChange)
 		}
-		if p.Scanner != nil {
+		if p.Scanner != nil && !cfg.Passive {
 			if hosts := newlyFoundHosts(changes); len(hosts) > 0 {
 				findings, err := p.Scanner(ctx, hosts)
 				if err != nil {
@@ -112,7 +119,8 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 
 	// Crawling runs independently of the host-level firstRun: the first crawl is
 	// a baseline (no endpoint diff), later crawls report NEW_ENDPOINT changes.
-	if p.Crawler != nil {
+	// Skipped for passive scopes — crawling is active traffic.
+	if p.Crawler != nil && !cfg.Passive {
 		changes = append(changes, p.crawl(ctx, cfg, runID, assets, res)...)
 	}
 

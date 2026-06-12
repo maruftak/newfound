@@ -169,6 +169,19 @@ scopes:
 `assets` and `history` then take `--scope <name>` to pick one. Single-scope
 files keep working with no changes.
 
+### Passive mode
+
+Some programs forbid active scanning. Set `passive: true` on a scope to monitor
+it on discovery alone — reconsentry skips the `httpx` probe, `--scan-new`, and
+`--crawl` for that scope and reports only `NEW_HOST` / `HOST_GONE`. It is
+per-scope, so an active scope and a passive one can run in the same process.
+
+```yaml
+name: scan-forbidding-vdp
+targets: [example.com]
+passive: true
+```
+
 ## What it detects
 
 | Change          | Priority | Meaning                                   |
@@ -182,13 +195,12 @@ files keep working with no changes.
 
 ## Roadmap
 
-- [ ] multiple scopes per config (monitor many programs from one process)
-- [ ] `history` / `assets` commands to query the snapshot DB without re-running
-- [ ] snapshot retention (`--keep N`) so the DB stays bounded over months
-- [ ] Telegram and email notifiers
-- [ ] `katana` collector for endpoint/param change tracking
-- [ ] `--scan-new`: run nuclei against newly-discovered hosts automatically
-- [ ] passive-only mode (no active probing)
+The initial roadmap shipped: multi-scope configs, `history` / `assets`,
+`--keep` retention, Telegram + email notifiers, `--crawl` (katana endpoints),
+`--scan-new` (nuclei), and passive mode. Next up:
+
+- [ ] richer notifier formatting (Slack blocks / Discord embeds)
+- [ ] more passive discovery sources
 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Good first issues are
 labeled `good-first-issue`.

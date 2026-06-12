@@ -19,6 +19,11 @@ min_priority: medium
 # (Vercel, Cloudflare, …) rotate IPs constantly and would spam false alerts.
 track_ip: false
 
+# Passive mode: monitor on discovery alone — no active probing, --scan-new or
+# --crawl. Use for programs that forbid active scanning. Reports NEW_HOST /
+# HOST_GONE only.
+passive: false
+
 # Each list is a set of destination URLs rendered in that platform's format,
 # so one scope can alert a generic endpoint, Slack, and Discord at once.
 notify:
