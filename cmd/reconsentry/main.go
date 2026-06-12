@@ -72,6 +72,7 @@ run flags:
   --timeout dur     max duration for a single run cycle (default 10m; 0 = no limit)
   --keep int        retain only the most recent N snapshots per scope (0 = keep all)
   --scan-new        run nuclei against newly-found hosts; findings show as VULN_FOUND
+  --crawl           crawl live hosts with katana; new URLs show as NEW_ENDPOINT
   --dry-run         print changes; do not send notifications
   --json            emit results as JSON (one object per cycle) for piping
 
@@ -87,6 +88,7 @@ func cmdRun(args []string) int {
 	timeout := fs.Duration("timeout", 10*time.Minute, "max duration for a single run cycle (0 = no limit)")
 	keep := fs.Int("keep", 0, "retain only the most recent N snapshots per scope (0 = keep all)")
 	scanNew := fs.Bool("scan-new", false, "run nuclei against newly-found hosts; findings show as VULN_FOUND")
+	crawl := fs.Bool("crawl", false, "crawl live hosts with katana; new URLs show as NEW_ENDPOINT")
 	dryRun := fs.Bool("dry-run", false, "print changes; do not notify")
 	jsonOut := fs.Bool("json", false, "emit run results as JSON (one object per cycle)")
 	_ = fs.Parse(args)
@@ -135,6 +137,10 @@ func cmdRun(args []string) int {
 		if *scanNew {
 			scanner = collect.Nuclei
 		}
+		var crawler runner.CrawlFunc
+		if *crawl {
+			crawler = collect.Katana
+		}
 		jobs = append(jobs, job{
 			cfg: cfg,
 			pipe: &runner.Pipeline{
@@ -142,6 +148,7 @@ func cmdRun(args []string) int {
 				Discover:  collect.Subfinder,
 				Probe:     collect.Httpx,
 				Scanner:   scanner,
+				Crawler:   crawler,
 				Notifiers: notifiers,
 				Keep:      *keep,
 			},
@@ -374,6 +381,9 @@ func printResult(res *runner.Result) {
 	if res.ScanErr != nil {
 		fmt.Fprintf(os.Stderr, "scan error: %v\n", res.ScanErr)
 	}
+	if res.CrawlErr != nil {
+		fmt.Fprintf(os.Stderr, "crawl error: %v\n", res.CrawlErr)
+	}
 	for _, e := range res.NotifyErrs {
 		fmt.Fprintf(os.Stderr, "notify error: %v\n", e)
 	}
@@ -404,6 +414,9 @@ type runJSON struct {
 func printJSON(scope string, res *runner.Result) {
 	if res.ScanErr != nil {
 		fmt.Fprintf(os.Stderr, "scan error: %v\n", res.ScanErr)
+	}
+	if res.CrawlErr != nil {
+		fmt.Fprintf(os.Stderr, "crawl error: %v\n", res.CrawlErr)
 	}
 	for _, e := range res.NotifyErrs {
 		fmt.Fprintf(os.Stderr, "notify error: %v\n", e)
