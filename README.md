@@ -182,6 +182,45 @@ targets: [example.com]
 passive: true
 ```
 
+### Telegram and email notifications
+
+Telegram and email destinations live under the same `notify:` block as Slack,
+Discord, and generic webhooks. The scaffold from `reconsentry init` includes the
+empty fields, and [`examples/multi-scope.yaml`](examples/multi-scope.yaml) shows
+how each scope can choose its own notification destinations.
+
+Keep tokens and SMTP passwords out of checked-in YAML by referencing environment
+variables with `${ENV_NAME}`. `reconsentry` expands those values before
+validation, so a missing secret fails fast instead of sending a broken alert.
+
+For Telegram:
+
+1. Create a bot with BotFather and copy the bot token.
+2. Send a message to the bot from the target chat.
+3. Get the chat ID from the Telegram Bot API.
+
+```yaml
+notify:
+  telegram:
+    - token: ${TG_TOKEN}
+      chat_id: ${TG_CHAT_ID}
+```
+
+For email, configure an SMTP submission server and at least one recipient. When
+`smtp_port` is omitted, the notifier defaults to `587`.
+
+```yaml
+notify:
+  email:
+    - smtp_host: smtp.example.com
+      smtp_port: 587
+      username: ${SMTP_USER}
+      password: ${SMTP_PASS}
+      from: alerts@example.com
+      to:
+        - security@example.com
+```
+
 ## What it detects
 
 | Change          | Priority | Meaning                                   |
