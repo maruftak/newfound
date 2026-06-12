@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-12
+
 ### Added
 - Passive mode: set `passive: true` on a scope to monitor it on discovery alone.
   reconsentry skips the active `httpx` probe (and `--scan-new`/`--crawl`) for
