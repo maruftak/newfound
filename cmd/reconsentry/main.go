@@ -71,6 +71,7 @@ run flags:
   --interval dur    if set (e.g. 6h), monitor continuously on this interval
   --timeout dur     max duration for a single run cycle (default 10m; 0 = no limit)
   --keep int        retain only the most recent N snapshots per scope (0 = keep all)
+  --max-hosts int   probe at most N hosts per run; bounds huge scopes (0 = no limit)
   --scan-new        run nuclei against newly-found hosts; findings show as VULN_FOUND
   --crawl           crawl live hosts with katana; new URLs show as NEW_ENDPOINT
   --dry-run         print changes; do not send notifications
@@ -87,6 +88,7 @@ func cmdRun(args []string) int {
 	interval := fs.Duration("interval", 0, "continuous run interval (e.g. 6h); 0 = run once")
 	timeout := fs.Duration("timeout", 10*time.Minute, "max duration for a single run cycle (0 = no limit)")
 	keep := fs.Int("keep", 0, "retain only the most recent N snapshots per scope (0 = keep all)")
+	maxHosts := fs.Int("max-hosts", 0, "probe at most N hosts per run; bounds huge scopes (0 = no limit)")
 	scanNew := fs.Bool("scan-new", false, "run nuclei against newly-found hosts; findings show as VULN_FOUND")
 	crawl := fs.Bool("crawl", false, "crawl live hosts with katana; new URLs show as NEW_ENDPOINT")
 	dryRun := fs.Bool("dry-run", false, "print changes; do not notify")
@@ -151,6 +153,7 @@ func cmdRun(args []string) int {
 				Crawler:   crawler,
 				Notifiers: notifiers,
 				Keep:      *keep,
+				MaxHosts:  *maxHosts,
 			},
 		})
 	}
@@ -378,6 +381,9 @@ func cmdHistory(args []string) int {
 }
 
 func printResult(res *runner.Result) {
+	if res.Truncated > 0 {
+		fmt.Fprintf(os.Stderr, "warning: --max-hosts dropped %d host(s) before probing; raise --max-hosts or narrow the scope\n", res.Truncated)
+	}
 	if res.ScanErr != nil {
 		fmt.Fprintf(os.Stderr, "scan error: %v\n", res.ScanErr)
 	}

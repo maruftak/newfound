@@ -6,6 +6,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -38,6 +39,7 @@ type Pipeline struct {
 	Crawler   CrawlFunc // optional; when set, live hosts are crawled for endpoint changes (run --crawl)
 	Notifiers []notify.Notifier
 	Keep      int              // if > 0, retain only the most recent Keep snapshots per scope
+	MaxHosts  int              // if > 0, probe at most this many hosts per run (safety bound for huge scopes)
 	Now       func() time.Time // injectable clock; defaults to time.Now
 }
 
@@ -49,6 +51,7 @@ type Result struct {
 	Findings   []model.Finding
 	Endpoints  []model.Endpoint
 	FirstRun   bool
+	Truncated  int // hosts dropped before probing by MaxHosts (0 = none)
 	NotifyErrs []error
 	ScanErr    error
 	CrawlErr   error
@@ -66,6 +69,7 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 		return nil, fmt.Errorf("discover: %w", err)
 	}
 	hosts := filterExcluded(dedupHosts(cfg.Targets, discovered), cfg)
+	hosts, truncated := capHosts(cfg.Targets, hosts, p.MaxHosts)
 
 	// Passive scopes (scan-forbidding programs) are monitored on discovery
 	// alone: no httpx probe, so hosts are recorded not-alive and the diff is
@@ -75,6 +79,11 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 	if !cfg.Passive {
 		probed, err = p.Probe(ctx, hosts)
 		if err != nil {
+			// A cancelled context or a killed child usually means the probe
+			// outran --timeout on a large surface; point the user at the levers.
+			if ctx.Err() != nil || strings.Contains(err.Error(), "killed") {
+				return nil, fmt.Errorf("probe: probing %d hosts failed, likely exceeding --timeout; raise --timeout or set --max-hosts to bound very large scopes: %w", len(hosts), err)
+			}
 			return nil, fmt.Errorf("probe: %w", err)
 		}
 	}
@@ -96,7 +105,7 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 		}
 	}
 
-	res := &Result{RunID: runID, Assets: assets, FirstRun: firstRun}
+	res := &Result{RunID: runID, Assets: assets, FirstRun: firstRun, Truncated: truncated}
 
 	var changes []diff.Change
 	if !firstRun {
@@ -132,6 +141,40 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 		}
 	}
 	return res, nil
+}
+
+// capHosts bounds the host list to max as a safety valve for pathologically
+// large discoveries (where probing every host would outrun --timeout). Seed
+// targets are always kept; the discovered remainder is capped deterministically
+// (lowest hostnames first) so the same hosts are probed each run and the diff
+// stays stable. Returns the capped list and how many hosts were dropped.
+func capHosts(targets, hosts []string, max int) ([]string, int) {
+	if max <= 0 || len(hosts) <= max {
+		return hosts, 0
+	}
+	isSeed := make(map[string]bool, len(targets))
+	for _, t := range targets {
+		isSeed[t] = true
+	}
+	var seeds, extra []string
+	for _, h := range hosts {
+		if isSeed[h] {
+			seeds = append(seeds, h)
+		} else {
+			extra = append(extra, h)
+		}
+	}
+	sort.Strings(extra)
+	room := max - len(seeds)
+	if room < 0 {
+		room = 0
+	}
+	dropped := 0
+	if room < len(extra) {
+		dropped = len(extra) - room
+		extra = extra[:room]
+	}
+	return append(seeds, extra...), dropped
 }
 
 func filterExcluded(hosts []string, cfg *config.Config) []string {
