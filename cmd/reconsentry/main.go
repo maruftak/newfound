@@ -462,6 +462,11 @@ min_priority: medium
 # (Vercel, Cloudflare, ...) rotate IPs constantly and would spam false alerts.
 track_ip: false
 
+# Passive mode: monitor on discovery alone — no active probing (httpx),
+# scanning (--scan-new) or crawling (--crawl). Use for programs that forbid
+# active scanning. Only NEW_HOST / HOST_GONE changes are reported.
+passive: false
+
 # Each list is a set of destination URLs rendered in that platform's format.
 # A scope can fan out to all three at once.
 #

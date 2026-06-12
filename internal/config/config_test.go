@@ -60,6 +60,25 @@ func TestParseStripsBOM(t *testing.T) {
 	}
 }
 
+func TestParsePassive(t *testing.T) {
+	// Defaults to false (active probing) when unset.
+	c, err := Parse([]byte("name: x\ntargets: [a.com]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Passive {
+		t.Errorf("passive should default to false")
+	}
+	// Honored when set.
+	c, err = Parse([]byte("name: x\ntargets: [a.com]\npassive: true\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Passive {
+		t.Errorf("passive: true should parse as true")
+	}
+}
+
 func TestParseErrors(t *testing.T) {
 	cases := map[string]string{
 		"no name":       "targets: [a.com]",

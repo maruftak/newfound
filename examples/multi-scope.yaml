@@ -23,6 +23,10 @@ scopes:
     targets:
       - widgets.example
     min_priority: high
+    # This program forbids active scanning: monitor on discovery alone
+    # (NEW_HOST / HOST_GONE), no probing/scanning/crawling. Per-scope, so the
+    # scope above still probes actively.
+    passive: true
     notify:
       discord:
         - https://discord.com/api/webhooks/XXX/YYY

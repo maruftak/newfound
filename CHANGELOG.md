@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Passive mode: set `passive: true` on a scope to monitor it on discovery alone.
+  reconsentry skips the active `httpx` probe (and `--scan-new`/`--crawl`) for
+  that scope and reports only `NEW_HOST` / `HOST_GONE`, so programs that forbid
+  active scanning can still be watched. Per-scope, so active and passive scopes
+  coexist in one run. Closes #12.
 - `run --scan-new` runs [nuclei](https://github.com/projectdiscovery/nuclei)
   against newly-discovered hosts and surfaces results as `VULN_FOUND` changes
   (priority mapped from severity), so a new asset is reported together with what

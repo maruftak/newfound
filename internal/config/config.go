@@ -70,6 +70,7 @@ type Config struct {
 	Exclude     []string `yaml:"exclude"`
 	MinPriority string   `yaml:"min_priority"` // low | medium | high
 	TrackIP     bool     `yaml:"track_ip"`     // alert on IP changes (noisy on CDNs); off by default
+	Passive     bool     `yaml:"passive"`      // discovery only: skip active probing/scanning/crawling
 	Notify      Notify   `yaml:"notify"`
 }
 
