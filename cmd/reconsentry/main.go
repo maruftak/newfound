@@ -435,6 +435,9 @@ track_ip: false
 
 # Each list is a set of destination URLs rendered in that platform's format.
 # A scope can fan out to all three at once.
+#
+# Keep secrets out of this file — reference environment variables as ${VAR},
+# e.g.  token: ${TG_TOKEN}   or   password: ${SMTP_PASS}
 notify:
   webhooks: []   # generic JSON POST
   slack: []      # Slack incoming-webhook URLs

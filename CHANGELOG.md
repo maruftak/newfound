@@ -35,6 +35,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Alert messages include a clickable `https://<host>` URL per change.
 - `Makefile`, `.golangci.yml`, `CHANGELOG.md`, issue/PR templates, and a
   golangci-lint CI job.
+- `${VAR}` environment-variable expansion in config values, so secrets (bot
+  tokens, SMTP passwords, webhook URLs) can be kept out of the scope file and
+  supplied via the environment. An unset variable expands to empty and fails
+  validation.
 
 ### Changed
 - **Breaking (config):** `notify.slack` and `notify.discord` are now lists of
@@ -61,6 +65,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 - Dead `prioritize.Sort` helper (results are already ordered by `diff.Diff`).
+
+### Security
+- Notifier transport errors no longer include the request URL, which can embed a
+  secret — a Telegram bot token in the path, or a Slack/Discord webhook URL that
+  is itself a credential. These errors surface to stderr/logs on delivery
+  failure, so the URL is now stripped.
 
 ## [0.1.0]
 

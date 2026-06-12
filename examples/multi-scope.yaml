@@ -4,6 +4,9 @@
 #
 # Only monitor targets you own or that are explicitly in scope for an
 # authorized bug-bounty / vulnerability-disclosure program.
+#
+# Keep secrets out of this file: reference env vars as ${VAR} (e.g. a bot
+# token as ${TG_TOKEN}); an unset variable expands to empty and fails validation.
 
 scopes:
   - name: acme-public

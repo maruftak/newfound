@@ -5,12 +5,27 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/maruftak/reconsentry/internal/model"
 )
+
+// envVar matches ${NAME} references for environment-variable expansion.
+var envVar = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+// expandEnv replaces ${VAR} references with environment values so secrets
+// (bot tokens, SMTP passwords, webhook URLs) can be kept out of the config
+// file and supplied via the environment instead. An unset variable expands to
+// empty, which validation then rejects with a clear error.
+func expandEnv(b []byte) []byte {
+	return envVar.ReplaceAllFunc(b, func(m []byte) []byte {
+		name := envVar.FindSubmatch(m)[1]
+		return []byte(os.Getenv(string(name)))
+	})
+}
 
 // Notify holds notification settings for a scope. Each field is a list of
 // destination URLs rendered in that platform's format, so a single scope can
@@ -89,6 +104,7 @@ func LoadAll(path string) ([]*Config, error) {
 // treated as a single scope. Scope names must be unique.
 func ParseAll(b []byte) ([]*Config, error) {
 	b = bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF}) // strip leading UTF-8 BOM (e.g. Notepad-saved files)
+	b = expandEnv(b)                                  // expand ${VAR} secret references from the environment
 	var f rawFile
 	if err := yaml.Unmarshal(b, &f); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
