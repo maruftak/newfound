@@ -18,8 +18,7 @@ Existing recon tools are great at *discovery* but leave you to diff the output b
 difference, prioritizes what matters, and pushes a clean alert to Slack / Discord / any
 webhook.
 
-<!-- TODO: replace with a real terminal demo GIF before launch -->
-<!-- ![demo](docs/demo.gif) -->
+![reconsentry monitoring a live target](docs/demo.png)
 
 > ⚠️ **Authorized use only.** Point `reconsentry` at assets you own or domains that are
 > explicitly in scope for a bug-bounty / VDP program. Recon against systems you don't
