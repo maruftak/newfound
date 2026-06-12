@@ -474,7 +474,7 @@ track_ip: false
 passive: false
 
 # Each list is a set of destination URLs rendered in that platform's format.
-# A scope can fan out to all three at once.
+# A scope can fan out to all destinations at once.
 #
 # Keep secrets out of this file — reference environment variables as ${VAR},
 # e.g.  token: ${TG_TOKEN}   or   password: ${SMTP_PASS}
@@ -482,4 +482,6 @@ notify:
   webhooks: []   # generic JSON POST
   slack: []      # Slack incoming-webhook URLs
   discord: []    # Discord webhook URLs
+  telegram: []   # Telegram Bot API targets
+  email: []      # SMTP email targets
 `
