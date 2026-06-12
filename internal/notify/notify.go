@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/smtp"
+	neturl "net/url"
 	"strings"
 	"time"
 
@@ -81,7 +82,14 @@ func postOnce(ctx context.Context, client *http.Client, url string, body []byte)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("post: %w", err)
+		// Drop the URL from transport errors: it can embed a secret — a Telegram
+		// bot token in the path, or a Slack/Discord webhook URL that is itself a
+		// credential. The caller already knows which destination it targeted.
+		var ue *neturl.Error
+		if errors.As(err, &ue) {
+			return fmt.Errorf("post failed: %w", ue.Err)
+		}
+		return fmt.Errorf("post failed: %w", err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body) // drain so the connection can be reused
