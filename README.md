@@ -18,7 +18,7 @@ Existing recon tools are great at *discovery* but leave you to diff the output b
 difference, prioritizes what matters, and pushes a clean alert to Slack / Discord / any
 webhook.
 
-![reconsentry monitoring a live target](docs/demo.png)
+![reconsentry detecting a new host appearing on a target's attack surface](docs/demo.gif)
 
 > ⚠️ **Authorized use only.** Point `reconsentry` at assets you own or domains that are
 > explicitly in scope for a bug-bounty / VDP program. Recon against systems you don't
