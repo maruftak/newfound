@@ -26,12 +26,16 @@ type ProbeFunc func(ctx context.Context, hosts []string) ([]model.Asset, error)
 // ScanFunc scans newly-found hosts for vulnerabilities/exposures.
 type ScanFunc func(ctx context.Context, hosts []string) ([]model.Finding, error)
 
+// CrawlFunc crawls live hosts and returns the endpoints (URLs/params) found.
+type CrawlFunc func(ctx context.Context, hosts []string) ([]model.Endpoint, error)
+
 // Pipeline runs one monitoring cycle.
 type Pipeline struct {
 	Store     *store.Store
 	Discover  DiscoverFunc
 	Probe     ProbeFunc
-	Scanner   ScanFunc // optional; when set, newly-found hosts are scanned (run --scan-new)
+	Scanner   ScanFunc  // optional; when set, newly-found hosts are scanned (run --scan-new)
+	Crawler   CrawlFunc // optional; when set, live hosts are crawled for endpoint changes (run --crawl)
 	Notifiers []notify.Notifier
 	Keep      int              // if > 0, retain only the most recent Keep snapshots per scope
 	Now       func() time.Time // injectable clock; defaults to time.Now
@@ -43,9 +47,11 @@ type Result struct {
 	Assets     []model.Asset
 	Changes    []diff.Change
 	Findings   []model.Finding
+	Endpoints  []model.Endpoint
 	FirstRun   bool
 	NotifyErrs []error
 	ScanErr    error
+	CrawlErr   error
 }
 
 // Run executes a single monitoring cycle for cfg.
@@ -84,8 +90,10 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 	}
 
 	res := &Result{RunID: runID, Assets: assets, FirstRun: firstRun}
+
+	var changes []diff.Change
 	if !firstRun {
-		changes := diff.Diff(prev, assets)
+		changes = diff.Diff(prev, assets)
 		if !cfg.TrackIP {
 			changes = dropKind(changes, diff.IPChange)
 		}
@@ -100,8 +108,15 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 				}
 			}
 		}
-		res.Changes = prioritize.Filter(changes, prioritize.Level(cfg.MinPriority))
 	}
+
+	// Crawling runs independently of the host-level firstRun: the first crawl is
+	// a baseline (no endpoint diff), later crawls report NEW_ENDPOINT changes.
+	if p.Crawler != nil {
+		changes = append(changes, p.crawl(ctx, cfg, runID, assets, res)...)
+	}
+
+	res.Changes = prioritize.Filter(changes, prioritize.Level(cfg.MinPriority))
 
 	for _, n := range p.Notifiers {
 		if err := n.Notify(ctx, cfg.Name, res.Changes); err != nil {
@@ -225,4 +240,43 @@ func matchTarget(host string, targets []string) string {
 		}
 	}
 	return best
+}
+
+// liveHosts returns the hostnames of assets that responded, as crawl targets.
+func liveHosts(assets []model.Asset) []string {
+	var hosts []string
+	for _, a := range assets {
+		if a.Alive {
+			hosts = append(hosts, a.Host)
+		}
+	}
+	return hosts
+}
+
+// crawl walks the live hosts, stores the endpoints, and returns NEW_ENDPOINT
+// changes against the previous crawl (none on the first crawl). Errors are
+// recorded on res rather than failing the whole run.
+func (p *Pipeline) crawl(ctx context.Context, cfg *config.Config, runID int64, assets []model.Asset, res *Result) []diff.Change {
+	prevEndpoints, err := p.Store.LatestEndpoints(cfg.Name)
+	if err != nil {
+		res.CrawlErr = err
+		return nil
+	}
+	eps, err := p.Crawler(ctx, liveHosts(assets))
+	if err != nil {
+		res.CrawlErr = err
+		return nil
+	}
+	for i := range eps {
+		eps[i].Target = matchTarget(eps[i].Host, cfg.Targets)
+	}
+	res.Endpoints = eps
+	if err := p.Store.SaveEndpoints(runID, cfg.Name, eps); err != nil {
+		res.CrawlErr = err
+		return nil
+	}
+	if len(prevEndpoints) == 0 {
+		return nil // first crawl is a baseline
+	}
+	return diff.DiffEndpoints(prevEndpoints, eps)
 }

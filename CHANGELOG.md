@@ -12,6 +12,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (priority mapped from severity), so a new asset is reported together with what
   is exposed on it. Scanning only targets hosts from `NEW_HOST`/`HOST_LIVE`
   changes, never the whole surface. Closes #11.
+- `run --crawl` crawls live hosts with [katana](https://github.com/projectdiscovery/katana)
+  and reports first-seen URLs/params as `NEW_ENDPOINT` changes, extending
+  monitoring from hosts to endpoints. The first crawl is a baseline; endpoints
+  are stored per run and pruned alongside snapshots by `--keep`. Closes #10.
 
 ## [0.2.0] - 2026-06-12
 

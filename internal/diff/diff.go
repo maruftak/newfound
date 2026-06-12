@@ -20,7 +20,8 @@ const (
 	IPChange     Kind = "IP_CHANGE"
 	NewTech      Kind = "NEW_TECH"
 	HostGone     Kind = "HOST_GONE"
-	VulnFound    Kind = "VULN_FOUND" // a finding from scanning a newly-discovered host
+	VulnFound    Kind = "VULN_FOUND"   // a finding from scanning a newly-discovered host
+	NewEndpoint  Kind = "NEW_ENDPOINT" // a URL/param seen for the first time
 )
 
 // Priority levels (higher = more interesting to a hunter).
@@ -38,6 +39,7 @@ var defaultPriority = map[Kind]int{
 	NewTech:      Low,
 	HostGone:     Low,
 	VulnFound:    High, // fallback; runner sets priority per finding severity
+	NewEndpoint:  Medium,
 }
 
 // Change is a single classified difference between snapshots.
@@ -142,4 +144,29 @@ func sortChanges(c []Change) {
 		}
 		return c[i].Kind < c[j].Kind
 	})
+}
+
+// DiffEndpoints compares previous and current endpoint sets (same scope) and
+// returns a NEW_ENDPOINT change for each URL not seen before. Pure function.
+func DiffEndpoints(prev, curr []model.Endpoint) []Change {
+	seen := make(map[string]bool, len(prev))
+	for _, e := range prev {
+		seen[e.URL] = true
+	}
+	var changes []Change
+	for _, e := range curr {
+		if seen[e.URL] {
+			continue
+		}
+		seen[e.URL] = true // also de-dupes within curr
+		changes = append(changes, Change{
+			Kind:     NewEndpoint,
+			Target:   e.Target,
+			Host:     e.Host,
+			Detail:   e.URL,
+			Priority: defaultPriority[NewEndpoint],
+		})
+	}
+	sortChanges(changes)
+	return changes
 }

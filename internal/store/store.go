@@ -38,6 +38,15 @@ CREATE TABLE IF NOT EXISTS assets (
 );
 CREATE INDEX IF NOT EXISTS idx_assets_run ON assets(run_id);
 CREATE INDEX IF NOT EXISTS idx_runs_scope ON runs(scope, id);
+CREATE TABLE IF NOT EXISTS endpoints (
+	run_id INTEGER NOT NULL,
+	scope  TEXT NOT NULL,
+	target TEXT,
+	host   TEXT NOT NULL,
+	url    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_endpoints_run ON endpoints(run_id);
+CREATE INDEX IF NOT EXISTS idx_endpoints_scope ON endpoints(scope, run_id);
 `
 
 // Open opens (creating if needed) the snapshot database at path.
@@ -172,6 +181,64 @@ func (s *Store) SaveRun(scope string, at time.Time, assets []model.Asset) (int64
 	return runID, nil
 }
 
+// SaveEndpoints persists crawled endpoints for a run.
+func (s *Store) SaveEndpoints(runID int64, scope string, eps []model.Endpoint) error {
+	if len(eps) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin endpoints: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.Prepare(`INSERT INTO endpoints(run_id, scope, target, host, url) VALUES(?,?,?,?,?)`)
+	if err != nil {
+		return fmt.Errorf("prepare endpoints: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, e := range eps {
+		if _, err := stmt.Exec(runID, scope, e.Target, e.Host, e.URL); err != nil {
+			return fmt.Errorf("insert endpoint %s: %w", e.URL, err)
+		}
+	}
+	return tx.Commit()
+}
+
+// LatestEndpoints returns the endpoints from the most recent run of scope that
+// recorded any (so an intermittent crawl does not flag everything as new). It
+// returns a nil slice when no crawl has happened yet.
+func (s *Store) LatestEndpoints(scope string) ([]model.Endpoint, error) {
+	var runID int64
+	err := s.db.QueryRow(`SELECT run_id FROM endpoints WHERE scope = ? ORDER BY run_id DESC LIMIT 1`, scope).Scan(&runID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("latest endpoint run: %w", err)
+	}
+	rows, err := s.db.Query(`SELECT target, host, url FROM endpoints WHERE run_id = ?`, runID)
+	if err != nil {
+		return nil, fmt.Errorf("query endpoints: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.Endpoint
+	for rows.Next() {
+		var (
+			e      model.Endpoint
+			target sql.NullString
+		)
+		if err := rows.Scan(&target, &e.Host, &e.URL); err != nil {
+			return nil, fmt.Errorf("scan endpoint: %w", err)
+		}
+		e.Target = target.String
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // Prune keeps only the most recent keep runs for scope (and their assets),
 // deleting older snapshots so the database stays bounded over long-running
 // monitoring. keep <= 0 is a no-op (retain everything).
@@ -190,6 +257,12 @@ func (s *Store) Prune(scope string, keep int) error {
 			SELECT id FROM runs WHERE scope = ? ORDER BY id DESC LIMIT ?)`,
 		scope, scope, keep); err != nil {
 		return fmt.Errorf("prune assets: %w", err)
+	}
+	if _, err := tx.Exec(
+		`DELETE FROM endpoints WHERE scope = ? AND run_id NOT IN (
+			SELECT id FROM runs WHERE scope = ? ORDER BY id DESC LIMIT ?)`,
+		scope, scope, keep); err != nil {
+		return fmt.Errorf("prune endpoints: %w", err)
 	}
 	if _, err := tx.Exec(
 		`DELETE FROM runs WHERE scope = ? AND id NOT IN (
