@@ -147,7 +147,7 @@ func cmdRun(args []string) int {
 			cfg: cfg,
 			pipe: &runner.Pipeline{
 				Store:     st,
-				Discover:  collect.Subfinder,
+				Discover:  collect.Discover,
 				Probe:     collect.Httpx,
 				Scanner:   scanner,
 				Crawler:   crawler,

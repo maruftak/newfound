@@ -9,13 +9,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/maruftak/reconsentry/internal/model"
 )
+
+const crtShURL = "https://crt.sh/"
+
+var crtShClient = http.DefaultClient
 
 // ensure returns a helpful error when a required external tool is missing.
 func ensure(tool string) error {
@@ -23,6 +30,20 @@ func ensure(tool string) error {
 		return fmt.Errorf("%s not found in PATH — install it (see README) to enable this collector", tool)
 	}
 	return nil
+}
+
+// Discover combines local CLI discovery with best-effort passive HTTP sources.
+func Discover(ctx context.Context, targets []string) ([]string, error) {
+	hosts, err := Subfinder(ctx, targets)
+	if err != nil {
+		return nil, err
+	}
+	if crtHosts, err := CrtSh(ctx, targets); err == nil {
+		hosts = append(hosts, crtHosts...)
+	} else {
+		fmt.Fprintf(os.Stderr, "warning: crt.sh discovery failed: %v\n", err)
+	}
+	return dedupHostStrings(hosts), nil
 }
 
 // Subfinder discovers subdomains for the given root targets via the subfinder CLI.
@@ -41,11 +62,96 @@ func Subfinder(ctx context.Context, targets []string) ([]string, error) {
 	return parseLines(out), nil
 }
 
+type crtShEntry struct {
+	CommonName string `json:"common_name"`
+	NameValue  string `json:"name_value"`
+}
+
+// CrtSh discovers subdomains from certificate transparency data.
+func CrtSh(ctx context.Context, targets []string) ([]string, error) {
+	return crtSh(ctx, targets, crtShURL)
+}
+
+func crtSh(ctx context.Context, targets []string, baseURL string) ([]string, error) {
+	var hosts []string
+	for _, target := range targets {
+		target = cleanHost(target)
+		if target == "" {
+			continue
+		}
+		reqCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		targetHosts, err := fetchCrtShTarget(reqCtx, baseURL, target)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		hosts = append(hosts, targetHosts...)
+	}
+	return dedupHostStrings(hosts), nil
+}
+
+func fetchCrtShTarget(ctx context.Context, baseURL, target string) ([]string, error) {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	q.Set("q", "%."+target)
+	q.Set("output", "json")
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := crtShClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("crt.sh %s: %s", target, resp.Status)
+	}
+
+	var entries []crtShEntry
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return nil, fmt.Errorf("crt.sh %s: %w", target, err)
+	}
+	return parseCrtSh(entries, target), nil
+}
+
+func parseCrtSh(entries []crtShEntry, target string) []string {
+	var hosts []string
+	for _, entry := range entries {
+		hosts = appendCrtShNames(hosts, target, entry.CommonName)
+		hosts = appendCrtShNames(hosts, target, entry.NameValue)
+	}
+	return dedupHostStrings(hosts)
+}
+
+func appendCrtShNames(hosts []string, target, names string) []string {
+	for _, name := range strings.Split(names, "\n") {
+		host := cleanHost(strings.TrimPrefix(strings.TrimSpace(name), "*."))
+		if inScopeHost(host, target) {
+			hosts = append(hosts, host)
+		}
+	}
+	return hosts
+}
+
+func inScopeHost(host, target string) bool {
+	return host == target || strings.HasSuffix(host, "."+target)
+}
+
 // parseLines splits newline-delimited output into a lowercased, de-duplicated host list.
 func parseLines(b []byte) []string {
+	return dedupHostStrings(strings.Split(string(b), "\n"))
+}
+
+func dedupHostStrings(in []string) []string {
 	seen := map[string]bool{}
-	var hosts []string
-	sc := bufio.NewScanner(bytes.NewReader(b))
+	hosts := make([]string, 0, len(in))
+	sc := bufio.NewScanner(strings.NewReader(strings.Join(in, "\n")))
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
 		h := strings.ToLower(model.TrimInvisible(sc.Text()))
