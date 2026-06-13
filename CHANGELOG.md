@@ -6,6 +6,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-14
+
+### Added
+- Three more passive subdomain-discovery sources alongside `subfinder`:
+  [crt.sh](https://crt.sh) certificate-transparency logs, the
+  [Wayback Machine](https://web.archive.org) URL index, and
+  [AlienVault OTX](https://otx.alienvault.com) passive DNS. All are pure HTTP
+  collectors (no extra install, no API key) and are safe on passive scopes. The
+  collect layer fans out over every source, merges and de-duplicates the hosts,
+  and fails soft per source — a missing `subfinder` binary or a dead endpoint
+  degrades coverage instead of aborting the run; discovery only errors when
+  every source fails. Closes #27.
+
+### Changed
+- Slack and Discord alerts are now grouped by priority (high → medium → low)
+  with a severity emoji and per-group headers. Payloads are chunked to stay
+  within platform limits (Slack's 3000-char section / 50-block caps, Discord's
+  1024-char field / 25-field caps), so a large diff is delivered instead of
+  being rejected. Long values are truncated on a rune boundary.
+
 ## [0.3.1] - 2026-06-12
 
 ### Added
