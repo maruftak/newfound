@@ -30,6 +30,12 @@ type ScanFunc func(ctx context.Context, hosts []string) ([]model.Finding, error)
 // CrawlFunc crawls live hosts and returns the endpoints (URLs/params) found.
 type CrawlFunc func(ctx context.Context, hosts []string) ([]model.Endpoint, error)
 
+// CertFunc fetches TLS certificate expiry for the given hosts.
+type CertFunc func(ctx context.Context, hosts []string) ([]model.CertInfo, error)
+
+// defaultCertDays is the expiry window used when CertDays is unset.
+const defaultCertDays = 30
+
 // Pipeline runs one monitoring cycle.
 type Pipeline struct {
 	Store     *store.Store
@@ -37,6 +43,8 @@ type Pipeline struct {
 	Probe     ProbeFunc
 	Scanner   ScanFunc  // optional; when set, newly-found hosts are scanned (run --scan-new)
 	Crawler   CrawlFunc // optional; when set, live hosts are crawled for endpoint changes (run --crawl)
+	CertCheck CertFunc  // optional; when set, live hosts' TLS certs are checked for near expiry (run --cert-check)
+	CertDays  int       // expiry window in days for CertCheck; <= 0 uses defaultCertDays
 	Notifiers []notify.Notifier
 	Keep      int              // if > 0, retain only the most recent Keep snapshots per scope
 	MaxHosts  int              // if > 0, probe at most this many hosts per run (safety bound for huge scopes)
@@ -55,6 +63,7 @@ type Result struct {
 	NotifyErrs []error
 	ScanErr    error
 	CrawlErr   error
+	CertErr    error
 }
 
 // Run executes a single monitoring cycle for cfg.
@@ -131,6 +140,13 @@ func (p *Pipeline) Run(ctx context.Context, cfg *config.Config) (*Result, error)
 	// Skipped for passive scopes — crawling is active traffic.
 	if p.Crawler != nil && !cfg.Passive {
 		changes = append(changes, p.crawl(ctx, cfg, runID, assets, res)...)
+	}
+
+	// Cert checking is active TLS traffic, so it is skipped for passive scopes.
+	// Expiry is evaluated against the live cert each run, independent of the
+	// snapshot diff.
+	if p.CertCheck != nil && !cfg.Passive {
+		changes = append(changes, p.certCheck(ctx, cfg, assets, res, now())...)
 	}
 
 	res.Changes = prioritize.Filter(changes, prioritize.Level(cfg.MinPriority))
@@ -330,4 +346,50 @@ func (p *Pipeline) crawl(ctx context.Context, cfg *config.Config, runID int64, a
 		return nil // first crawl is a baseline
 	}
 	return diff.DiffEndpoints(prevEndpoints, eps)
+}
+
+// certCheck fetches TLS cert expiry for the live hosts and returns
+// CERT_EXPIRING changes for any cert within the configured window. Errors are
+// recorded on res rather than failing the run.
+func (p *Pipeline) certCheck(ctx context.Context, cfg *config.Config, assets []model.Asset, res *Result, now time.Time) []diff.Change {
+	infos, err := p.CertCheck(ctx, liveHosts(assets))
+	if err != nil {
+		res.CertErr = err
+		return nil
+	}
+	days := p.CertDays
+	if days <= 0 {
+		days = defaultCertDays
+	}
+	changes := certExpiringChanges(infos, days, now)
+	for i := range changes {
+		changes[i].Target = matchTarget(changes[i].Host, cfg.Targets)
+	}
+	return changes
+}
+
+// certExpiringChanges returns a CERT_EXPIRING change for each cert that is
+// already expired or expires within `days`. Pure so it can be unit-tested.
+func certExpiringChanges(infos []model.CertInfo, days int, now time.Time) []diff.Change {
+	cutoff := now.AddDate(0, 0, days)
+	var changes []diff.Change
+	for _, info := range infos {
+		if info.Expiry.After(cutoff) {
+			continue
+		}
+		var detail string
+		if info.Expiry.Before(now) {
+			detail = fmt.Sprintf("TLS certificate expired on %s", info.Expiry.Format("2006-01-02"))
+		} else {
+			remaining := int(info.Expiry.Sub(now).Hours()/24 + 0.5)
+			detail = fmt.Sprintf("TLS certificate expires in %d day(s) on %s", remaining, info.Expiry.Format("2006-01-02"))
+		}
+		changes = append(changes, diff.Change{
+			Kind:     diff.CertExpiring,
+			Host:     info.Host,
+			Detail:   detail,
+			Priority: diff.High,
+		})
+	}
+	return changes
 }
