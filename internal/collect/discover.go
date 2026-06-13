@@ -16,6 +16,7 @@ type source struct {
 var defaultSources = []source{
 	{"subfinder", Subfinder},
 	{"crt.sh", CrtSh},
+	{"wayback", Wayback},
 }
 
 // Discover runs every discovery source for the given root targets and merges
