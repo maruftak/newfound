@@ -53,6 +53,58 @@ func TestWebhookSlackPayload(t *testing.T) {
 	if _, ok := body["text"]; !ok {
 		t.Errorf("slack payload should have a text field, got %v", body)
 	}
+	attachments, ok := body["attachments"].([]any)
+	if !ok || len(attachments) != 1 {
+		t.Fatalf("slack payload should have one attachment, got %v", body["attachments"])
+	}
+	attachment, ok := attachments[0].(map[string]any)
+	if !ok {
+		t.Fatalf("slack attachment should be an object, got %T", attachments[0])
+	}
+	if attachment["color"] != "#d73a49" {
+		t.Errorf("high priority attachment should be red, got %v", attachment["color"])
+	}
+	blocks, ok := attachment["blocks"].([]any)
+	if !ok || len(blocks) == 0 {
+		t.Fatalf("slack attachment should include blocks, got %v", attachment["blocks"])
+	}
+	encoded, _ := json.Marshal(blocks)
+	if !strings.Contains(string(encoded), "https://a.example.com|a.example.com") {
+		t.Errorf("slack blocks should link the host, got %s", encoded)
+	}
+}
+
+func TestWebhookDiscordPayload(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &body)
+		rw.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	w := NewWebhook(srv.URL, "discord")
+	if err := w.Notify(context.Background(), "prog", sampleChanges()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := body["content"]; !ok {
+		t.Errorf("discord payload should have fallback content, got %v", body)
+	}
+	embeds, ok := body["embeds"].([]any)
+	if !ok || len(embeds) != 1 {
+		t.Fatalf("discord payload should have one embed, got %v", body["embeds"])
+	}
+	embed, ok := embeds[0].(map[string]any)
+	if !ok {
+		t.Fatalf("discord embed should be an object, got %T", embeds[0])
+	}
+	if embed["color"] != float64(0xd73a49) {
+		t.Errorf("high priority embed should be red, got %v", embed["color"])
+	}
+	encoded, _ := json.Marshal(embed)
+	if !strings.Contains(string(encoded), "[a.example.com](https://a.example.com)") {
+		t.Errorf("discord embed should link the host, got %s", encoded)
+	}
 }
 
 func TestWebhookRetriesTransientThenSucceeds(t *testing.T) {
