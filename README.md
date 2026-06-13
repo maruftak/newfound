@@ -234,6 +234,7 @@ notify:
 | `IP_CHANGE`     | low      | resolved IP changed (opt-in via `track_ip`; off by default — noisy on CDNs) |
 | `NEW_TECH`      | low      | a new technology fingerprint              |
 | `HOST_GONE`     | low      | a host stopped resolving/responding       |
+| `CERT_EXPIRING` | high     | a host's TLS cert is near expiry (opt-in via `--cert-check`) |
 
 ## Roadmap
 

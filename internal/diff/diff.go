@@ -20,8 +20,9 @@ const (
 	IPChange     Kind = "IP_CHANGE"
 	NewTech      Kind = "NEW_TECH"
 	HostGone     Kind = "HOST_GONE"
-	VulnFound    Kind = "VULN_FOUND"   // a finding from scanning a newly-discovered host
-	NewEndpoint  Kind = "NEW_ENDPOINT" // a URL/param seen for the first time
+	VulnFound    Kind = "VULN_FOUND"    // a finding from scanning a newly-discovered host
+	NewEndpoint  Kind = "NEW_ENDPOINT"  // a URL/param seen for the first time
+	CertExpiring Kind = "CERT_EXPIRING" // a host's TLS certificate is near expiry
 )
 
 // Priority levels (higher = more interesting to a hunter).
@@ -40,6 +41,7 @@ var defaultPriority = map[Kind]int{
 	HostGone:     Low,
 	VulnFound:    High, // fallback; runner sets priority per finding severity
 	NewEndpoint:  Medium,
+	CertExpiring: High,
 }
 
 // Change is a single classified difference between snapshots.

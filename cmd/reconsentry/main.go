@@ -74,6 +74,8 @@ run flags:
   --max-hosts int   probe at most N hosts per run; bounds huge scopes (0 = no limit)
   --scan-new        run nuclei against newly-found hosts; findings show as VULN_FOUND
   --crawl           crawl live hosts with katana; new URLs show as NEW_ENDPOINT
+  --cert-check      check live hosts' TLS certs; near-expiry shows as CERT_EXPIRING
+  --cert-days int   CERT_EXPIRING window in days (default 30; with --cert-check)
   --dry-run         print changes; do not send notifications
   --json            emit results as JSON (one object per cycle) for piping
 
@@ -91,6 +93,8 @@ func cmdRun(args []string) int {
 	maxHosts := fs.Int("max-hosts", 0, "probe at most N hosts per run; bounds huge scopes (0 = no limit)")
 	scanNew := fs.Bool("scan-new", false, "run nuclei against newly-found hosts; findings show as VULN_FOUND")
 	crawl := fs.Bool("crawl", false, "crawl live hosts with katana; new URLs show as NEW_ENDPOINT")
+	certCheck := fs.Bool("cert-check", false, "check live hosts' TLS certs; near-expiry shows as CERT_EXPIRING")
+	certDays := fs.Int("cert-days", 30, "CERT_EXPIRING window in days (with --cert-check)")
 	dryRun := fs.Bool("dry-run", false, "print changes; do not notify")
 	jsonOut := fs.Bool("json", false, "emit run results as JSON (one object per cycle)")
 	_ = fs.Parse(args)
@@ -143,6 +147,10 @@ func cmdRun(args []string) int {
 		if *crawl {
 			crawler = collect.Katana
 		}
+		var certChecker runner.CertFunc
+		if *certCheck {
+			certChecker = collect.CertExpiry
+		}
 		jobs = append(jobs, job{
 			cfg: cfg,
 			pipe: &runner.Pipeline{
@@ -151,6 +159,8 @@ func cmdRun(args []string) int {
 				Probe:     collect.Httpx,
 				Scanner:   scanner,
 				Crawler:   crawler,
+				CertCheck: certChecker,
+				CertDays:  *certDays,
 				Notifiers: notifiers,
 				Keep:      *keep,
 				MaxHosts:  *maxHosts,
@@ -390,6 +400,9 @@ func printResult(res *runner.Result) {
 	if res.CrawlErr != nil {
 		fmt.Fprintf(os.Stderr, "crawl error: %v\n", res.CrawlErr)
 	}
+	if res.CertErr != nil {
+		fmt.Fprintf(os.Stderr, "cert-check error: %v\n", res.CertErr)
+	}
 	for _, e := range res.NotifyErrs {
 		fmt.Fprintf(os.Stderr, "notify error: %v\n", e)
 	}
@@ -423,6 +436,9 @@ func printJSON(scope string, res *runner.Result) {
 	}
 	if res.CrawlErr != nil {
 		fmt.Fprintf(os.Stderr, "crawl error: %v\n", res.CrawlErr)
+	}
+	if res.CertErr != nil {
+		fmt.Fprintf(os.Stderr, "cert-check error: %v\n", res.CertErr)
 	}
 	for _, e := range res.NotifyErrs {
 		fmt.Fprintf(os.Stderr, "notify error: %v\n", e)
