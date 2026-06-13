@@ -122,12 +122,21 @@ reconsentry run --config scope.yaml --interval 6h
 | `--max-hosts`| `0` (no limit)   | probe at most N hosts per run; safety bound for huge scopes |
 | `--dry-run`  | `false`          | print changes without sending notifications       |
 | `--json`     | `false`          | emit results as JSON (one object per cycle)       |
+| `--sarif`    | `""`             | write each cycle's changes to a SARIF file        |
 
 `--json` makes runs scriptable, e.g. surface only high-priority changes:
 
 ```bash
 reconsentry run --config scope.yaml --json \
   | jq '.changes[] | select(.priority >= 3) | "\(.kind) \(.host)"'
+```
+
+`--sarif` writes a [SARIF 2.1.0](https://sarifweb.azurewebsites.net/) file (one
+run per scope, each change a result) so a scheduled run can upload its findings
+to GitHub code scanning or any SARIF-aware dashboard:
+
+```bash
+reconsentry run --config scope.yaml --sarif reconsentry.sarif
 ```
 
 ### Inspect the current surface
