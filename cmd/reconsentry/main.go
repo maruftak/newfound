@@ -21,6 +21,7 @@ import (
 	"github.com/maruftak/reconsentry/internal/diff"
 	"github.com/maruftak/reconsentry/internal/model"
 	"github.com/maruftak/reconsentry/internal/notify"
+	"github.com/maruftak/reconsentry/internal/report"
 	"github.com/maruftak/reconsentry/internal/runner"
 	"github.com/maruftak/reconsentry/internal/store"
 )
@@ -78,6 +79,7 @@ run flags:
   --cert-days int   CERT_EXPIRING window in days (default 30; with --cert-check)
   --dry-run         print changes; do not send notifications
   --json            emit results as JSON (one object per cycle) for piping
+  --sarif string    write each cycle's changes to this SARIF file (CI upload)
 
 Only monitor targets you are authorized to test.
 `)
@@ -97,6 +99,7 @@ func cmdRun(args []string) int {
 	certDays := fs.Int("cert-days", 30, "CERT_EXPIRING window in days (with --cert-check)")
 	dryRun := fs.Bool("dry-run", false, "print changes; do not notify")
 	jsonOut := fs.Bool("json", false, "emit run results as JSON (one object per cycle)")
+	sarifPath := fs.String("sarif", "", "write each cycle's changes to this SARIF file (for CI code-scanning upload)")
 	_ = fs.Parse(args)
 
 	if *cfgPath == "" {
@@ -175,6 +178,7 @@ func cmdRun(args []string) int {
 	// runOnce runs every scope once and reports whether all succeeded.
 	runOnce := func() bool {
 		ok := true
+		var sarifScopes []report.ScopeChanges
 		for _, j := range jobs {
 			runCtx := ctx
 			var cancel context.CancelFunc
@@ -190,6 +194,9 @@ func cmdRun(args []string) int {
 				ok = false
 				continue
 			}
+			if *sarifPath != "" {
+				sarifScopes = append(sarifScopes, report.ScopeChanges{Scope: j.cfg.Name, Changes: res.Changes})
+			}
 			if *jsonOut {
 				printJSON(j.cfg.Name, res)
 			} else {
@@ -197,6 +204,12 @@ func cmdRun(args []string) int {
 					fmt.Printf("== %s ==\n", j.cfg.Name)
 				}
 				printResult(res)
+			}
+		}
+		if *sarifPath != "" {
+			if err := writeSARIF(*sarifPath, sarifScopes); err != nil {
+				fmt.Fprintf(os.Stderr, "sarif error: %v\n", err)
+				ok = false
 			}
 		}
 		return ok
@@ -388,6 +401,16 @@ func cmdHistory(args []string) int {
 		fmt.Printf("  #%-5d %s  %d asset(s)\n", r.ID, r.StartedAt.Format("2006-01-02 15:04:05"), r.Assets)
 	}
 	return 0
+}
+
+// writeSARIF renders the cycle's changes to a SARIF file, overwriting any
+// previous cycle (last write wins on a continuous interval).
+func writeSARIF(path string, scopes []report.ScopeChanges) error {
+	b, err := report.SARIF(scopes)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o644)
 }
 
 func printResult(res *runner.Result) {
