@@ -117,15 +117,134 @@ func retryable(err error) bool {
 func (w *Webhook) payload(scope string, changes []diff.Change) ([]byte, error) {
 	switch w.Format {
 	case "slack":
-		return json.Marshal(map[string]string{"text": RenderText(scope, changes)})
+		return json.Marshal(renderSlack(scope, changes))
 	case "discord":
-		return json.Marshal(map[string]string{"content": RenderText(scope, changes)})
+		return json.Marshal(renderDiscord(scope, changes))
 	default:
 		return json.Marshal(map[string]any{
 			"scope":   scope,
 			"count":   len(changes),
 			"changes": changes,
 		})
+	}
+}
+
+func renderSlack(scope string, changes []diff.Change) map[string]any {
+	return map[string]any{
+		"text": RenderText(scope, changes),
+		"attachments": []map[string]any{{
+			"color": priorityColor(maxPriority(changes)),
+			"blocks": []map[string]any{
+				{
+					"type": "header",
+					"text": map[string]string{
+						"type": "plain_text",
+						"text": fmt.Sprintf("reconsentry: %d change(s) on %s", len(changes), scope),
+					},
+				},
+				{
+					"type": "section",
+					"text": map[string]string{
+						"type": "mrkdwn",
+						"text": slackChangeList(changes),
+					},
+				},
+			},
+		}},
+	}
+}
+
+func renderDiscord(scope string, changes []diff.Change) map[string]any {
+	fields := make([]map[string]any, 0, len(changes))
+	for _, c := range changes {
+		fields = append(fields, map[string]any{
+			"name":   fmt.Sprintf("%s · %s", c.Kind, priorityName(c.Priority)),
+			"value":  discordChange(c),
+			"inline": false,
+		})
+	}
+	return map[string]any{
+		"content": RenderText(scope, changes),
+		"embeds": []map[string]any{{
+			"title":  fmt.Sprintf("reconsentry: %d change(s) on %s", len(changes), scope),
+			"color":  priorityColorInt(maxPriority(changes)),
+			"fields": fields,
+		}},
+	}
+}
+
+func slackChangeList(changes []diff.Change) string {
+	var b strings.Builder
+	for i, c := range changes {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "• *%s* · %s · %s — %s", c.Kind, priorityName(c.Priority), slackHost(c.Host), c.Detail)
+	}
+	return b.String()
+}
+
+func discordChange(c diff.Change) string {
+	if c.Host == "" {
+		return c.Detail
+	}
+	return fmt.Sprintf("%s — %s", discordHost(c.Host), c.Detail)
+}
+
+func slackHost(host string) string {
+	if host == "" {
+		return "unknown host"
+	}
+	return fmt.Sprintf("<https://%s|%s>", host, host)
+}
+
+func discordHost(host string) string {
+	if host == "" {
+		return "unknown host"
+	}
+	return fmt.Sprintf("[%s](https://%s)", host, host)
+}
+
+func maxPriority(changes []diff.Change) int {
+	max := diff.Low
+	for _, c := range changes {
+		if c.Priority > max {
+			max = c.Priority
+		}
+	}
+	return max
+}
+
+func priorityName(p int) string {
+	switch p {
+	case diff.High:
+		return "high"
+	case diff.Medium:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func priorityColor(p int) string {
+	switch p {
+	case diff.High:
+		return "#d73a49"
+	case diff.Medium:
+		return "#d29922"
+	default:
+		return "#57606a"
+	}
+}
+
+func priorityColorInt(p int) int {
+	switch p {
+	case diff.High:
+		return 0xd73a49
+	case diff.Medium:
+		return 0xd29922
+	default:
+		return 0x57606a
 	}
 }
 
