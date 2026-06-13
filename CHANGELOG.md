@@ -6,6 +6,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-14
+
+### Added
+- `run --cert-check` fetches each live host's TLS certificate and reports
+  `CERT_EXPIRING` (high priority) for any cert that is already expired or within
+  the `--cert-days` window (default 30). Expiry is evaluated against the live
+  cert each run; it is active TLS traffic, so it is skipped on passive scopes.
+- `run --sarif PATH` writes the cycle's changes as a [SARIF 2.1.0] file (one run
+  per scope, each change a result with its kind as the rule and priority mapped
+  to a SARIF level), so a scheduled run can upload findings to GitHub code
+  scanning or any SARIF-aware dashboard.
+
+### Changed
+- CI now runs `govulncheck` on every build, and Dependabot keeps Go modules and
+  GitHub Actions up to date. The workflow actions were bumped off the deprecated
+  Node 20 runtime (`checkout@v6`, `setup-go@v6`, `goreleaser-action@v7`).
+
+[SARIF 2.1.0]: https://sarifweb.azurewebsites.net/
+
 ## [0.4.0] - 2026-06-14
 
 ### Added
