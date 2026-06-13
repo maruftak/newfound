@@ -13,6 +13,7 @@ import (
 	neturl "net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/maruftak/reconsentry/internal/diff"
 )
@@ -129,66 +130,212 @@ func (w *Webhook) payload(scope string, changes []diff.Change) ([]byte, error) {
 	}
 }
 
+// Platform payload limits. Slack rejects a section whose mrkdwn text exceeds
+// 3000 chars or a message with more than 50 blocks; Discord rejects an embed
+// field value over 1024 chars or an embed with more than 25 fields. We render
+// well under those caps and truncate gracefully so a large diff still delivers.
+const (
+	slackSectionLimit = 2900
+	slackMaxBlocks    = 50
+	discordFieldLimit = 1000
+	discordMaxFields  = 25
+)
+
+// priorityGroup is a non-empty set of changes sharing a normalized priority.
+type priorityGroup struct {
+	priority int
+	changes  []diff.Change
+}
+
+// groupByPriority buckets changes high → medium → low, preserving input order
+// within each bucket and omitting empty buckets. Any unexpected priority value
+// normalizes into the low bucket so no change is ever dropped.
+func groupByPriority(changes []diff.Change) []priorityGroup {
+	order := []int{diff.High, diff.Medium, diff.Low}
+	idx := map[int]int{diff.High: 0, diff.Medium: 1, diff.Low: 2}
+	buckets := make([][]diff.Change, len(order))
+	for _, c := range changes {
+		buckets[idx[normalizePriority(c.Priority)]] = append(buckets[idx[normalizePriority(c.Priority)]], c)
+	}
+	var groups []priorityGroup
+	for i, p := range order {
+		if len(buckets[i]) > 0 {
+			groups = append(groups, priorityGroup{priority: p, changes: buckets[i]})
+		}
+	}
+	return groups
+}
+
+func normalizePriority(p int) int {
+	switch p {
+	case diff.High:
+		return diff.High
+	case diff.Medium:
+		return diff.Medium
+	default:
+		return diff.Low
+	}
+}
+
+func priorityEmoji(p int) string {
+	switch normalizePriority(p) {
+	case diff.High:
+		return "🔴"
+	case diff.Medium:
+		return "🟠"
+	default:
+		return "⚪"
+	}
+}
+
+// chunkLines packs lines into chunks whose newline-joined length stays within
+// limit. A single oversized line is rune-safely truncated rather than dropped.
+func chunkLines(lines []string, limit int) []string {
+	var chunks []string
+	var b strings.Builder
+	for _, ln := range lines {
+		ln = truncate(ln, limit)
+		if b.Len() > 0 && b.Len()+1+len(ln) > limit {
+			chunks = append(chunks, b.String())
+			b.Reset()
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(ln)
+	}
+	if b.Len() > 0 {
+		chunks = append(chunks, b.String())
+	}
+	return chunks
+}
+
+// truncate shortens s to at most max bytes, ending on a rune boundary and
+// appending an ellipsis when it cuts.
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	cut := max - len("…")
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
+}
+
 func renderSlack(scope string, changes []diff.Change) map[string]any {
+	blocks := []map[string]any{{
+		"type": "header",
+		"text": map[string]string{
+			"type": "plain_text",
+			"text": fmt.Sprintf("reconsentry: %d change(s) on %s", len(changes), scope),
+		},
+	}}
+	blocks = append(blocks, slackChangeBlocks(changes)...)
+	blocks = capSlackBlocks(blocks)
 	return map[string]any{
 		"text": RenderText(scope, changes),
 		"attachments": []map[string]any{{
-			"color": priorityColor(maxPriority(changes)),
-			"blocks": []map[string]any{
-				{
-					"type": "header",
-					"text": map[string]string{
-						"type": "plain_text",
-						"text": fmt.Sprintf("reconsentry: %d change(s) on %s", len(changes), scope),
-					},
-				},
-				{
-					"type": "section",
-					"text": map[string]string{
-						"type": "mrkdwn",
-						"text": slackChangeList(changes),
-					},
-				},
-			},
+			"color":  priorityColor(maxPriority(changes)),
+			"blocks": blocks,
 		}},
 	}
 }
 
-func renderDiscord(scope string, changes []diff.Change) map[string]any {
-	fields := make([]map[string]any, 0, len(changes))
-	for _, c := range changes {
-		fields = append(fields, map[string]any{
-			"name":   fmt.Sprintf("%s · %s", c.Kind, priorityName(c.Priority)),
-			"value":  discordChange(c),
-			"inline": false,
-		})
+// slackChangeBlocks renders one or more mrkdwn section blocks per priority
+// group, each capped to Slack's per-section character limit.
+func slackChangeBlocks(changes []diff.Change) []map[string]any {
+	var blocks []map[string]any
+	for _, g := range groupByPriority(changes) {
+		header := fmt.Sprintf("%s *%s priority — %d*", priorityEmoji(g.priority), priorityName(g.priority), len(g.changes))
+		lines := []string{header}
+		for _, c := range g.changes {
+			lines = append(lines, slackLine(c))
+		}
+		for _, chunk := range chunkLines(lines, slackSectionLimit) {
+			blocks = append(blocks, map[string]any{
+				"type": "section",
+				"text": map[string]string{"type": "mrkdwn", "text": chunk},
+			})
+		}
 	}
+	return blocks
+}
+
+func slackLine(c diff.Change) string {
+	return fmt.Sprintf("• *%s* · %s — %s", c.Kind, slackHost(c.Host), c.Detail)
+}
+
+// capSlackBlocks keeps the block list within Slack's per-message limit,
+// replacing the overflow tail with a context note.
+func capSlackBlocks(blocks []map[string]any) []map[string]any {
+	if len(blocks) <= slackMaxBlocks {
+		return blocks
+	}
+	kept := blocks[:slackMaxBlocks-1]
+	dropped := len(blocks) - (slackMaxBlocks - 1)
+	note := map[string]any{
+		"type": "context",
+		"elements": []map[string]any{{
+			"type": "mrkdwn",
+			"text": fmt.Sprintf("_…and %d more block(s) truncated to fit Slack's limit_", dropped),
+		}},
+	}
+	return append(kept, note)
+}
+
+func renderDiscord(scope string, changes []diff.Change) map[string]any {
 	return map[string]any{
 		"content": RenderText(scope, changes),
 		"embeds": []map[string]any{{
 			"title":  fmt.Sprintf("reconsentry: %d change(s) on %s", len(changes), scope),
 			"color":  priorityColorInt(maxPriority(changes)),
-			"fields": fields,
+			"fields": discordFields(changes),
 		}},
 	}
 }
 
-func slackChangeList(changes []diff.Change) string {
-	var b strings.Builder
-	for i, c := range changes {
-		if i > 0 {
-			b.WriteByte('\n')
+// discordFields renders one or more embed fields per priority group, each value
+// capped to Discord's per-field limit, with the field count capped overall.
+func discordFields(changes []diff.Change) []map[string]any {
+	var fields []map[string]any
+	for _, g := range groupByPriority(changes) {
+		lines := make([]string, 0, len(g.changes))
+		for _, c := range g.changes {
+			lines = append(lines, discordLine(c))
 		}
-		fmt.Fprintf(&b, "• *%s* · %s · %s — %s", c.Kind, priorityName(c.Priority), slackHost(c.Host), c.Detail)
+		for i, chunk := range chunkLines(lines, discordFieldLimit) {
+			name := fmt.Sprintf("%s %s (%d)", priorityEmoji(g.priority), priorityName(g.priority), len(g.changes))
+			if i > 0 {
+				name = fmt.Sprintf("%s %s (cont.)", priorityEmoji(g.priority), priorityName(g.priority))
+			}
+			fields = append(fields, map[string]any{"name": name, "value": chunk, "inline": false})
+		}
 	}
-	return b.String()
+	return capDiscordFields(fields)
 }
 
-func discordChange(c diff.Change) string {
+func discordLine(c diff.Change) string {
 	if c.Host == "" {
-		return c.Detail
+		return fmt.Sprintf("• **%s** — %s", c.Kind, c.Detail)
 	}
-	return fmt.Sprintf("%s — %s", discordHost(c.Host), c.Detail)
+	return fmt.Sprintf("• **%s** · %s — %s", c.Kind, discordHost(c.Host), c.Detail)
+}
+
+// capDiscordFields keeps the field list within Discord's per-embed limit,
+// replacing the overflow tail with a summary field.
+func capDiscordFields(fields []map[string]any) []map[string]any {
+	if len(fields) <= discordMaxFields {
+		return fields
+	}
+	kept := fields[:discordMaxFields-1]
+	dropped := len(fields) - (discordMaxFields - 1)
+	note := map[string]any{
+		"name":   "…truncated",
+		"value":  fmt.Sprintf("%d more field(s) omitted to fit Discord's 25-field limit", dropped),
+		"inline": false,
+	}
+	return append(kept, note)
 }
 
 func slackHost(host string) string {

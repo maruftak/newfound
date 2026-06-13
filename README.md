@@ -237,12 +237,15 @@ notify:
 
 ## Roadmap
 
-The initial roadmap shipped: multi-scope configs, `history` / `assets`,
+The planned roadmap has shipped: multi-scope configs, `history` / `assets`,
 `--keep` retention, Telegram + email notifiers, `--crawl` (katana endpoints),
-`--scan-new` (nuclei), and passive mode. Next up:
+`--scan-new` (nuclei), passive mode, and most recently:
 
-- [ ] richer notifier formatting (Slack blocks / Discord embeds)
+- [x] richer notifier formatting — Slack blocks / Discord embeds, grouped by
+      priority with severity emoji and limit-safe chunking
 - [x] more passive discovery sources — crt.sh, Wayback, and OTX
+
+Ideas for what's next are welcome — open an issue.
 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Good first issues are
 labeled `good-first-issue`.
