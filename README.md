@@ -37,7 +37,9 @@ the **diff + prioritization + alerting** layer on top.
 ## Install
 
 `reconsentry` is a single Go binary. It shells out to [`subfinder`][sf] and [`httpx`][hx]
-(from ProjectDiscovery) for discovery and probing — install those too.
+(from ProjectDiscovery) for discovery and probing — install those too. Subdomain
+discovery is also augmented by [crt.sh][crtsh] certificate-transparency logs over
+plain HTTP, so that source needs no extra install.
 
 ```bash
 # reconsentry
@@ -239,7 +241,7 @@ The initial roadmap shipped: multi-scope configs, `history` / `assets`,
 `--scan-new` (nuclei), and passive mode. Next up:
 
 - [ ] richer notifier formatting (Slack blocks / Discord embeds)
-- [ ] more passive discovery sources
+- [ ] more passive discovery sources — crt.sh shipped; Wayback / OTX next
 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Good first issues are
 labeled `good-first-issue`.
@@ -250,3 +252,4 @@ MIT — see [LICENSE](LICENSE).
 
 [sf]: https://github.com/projectdiscovery/subfinder
 [hx]: https://github.com/projectdiscovery/httpx
+[crtsh]: https://crt.sh
