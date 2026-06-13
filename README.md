@@ -38,9 +38,9 @@ the **diff + prioritization + alerting** layer on top.
 
 `reconsentry` is a single Go binary. It shells out to [`subfinder`][sf] and [`httpx`][hx]
 (from ProjectDiscovery) for discovery and probing — install those too. Subdomain
-discovery is also augmented by [crt.sh][crtsh] certificate-transparency logs and
-the [Wayback Machine][wb] URL index over plain HTTP, so those sources need no
-extra install.
+discovery is also augmented by [crt.sh][crtsh] certificate-transparency logs, the
+[Wayback Machine][wb] URL index, and [AlienVault OTX][otx] passive DNS over plain
+HTTP, so those sources need no extra install.
 
 ```bash
 # reconsentry
@@ -242,7 +242,7 @@ The initial roadmap shipped: multi-scope configs, `history` / `assets`,
 `--scan-new` (nuclei), and passive mode. Next up:
 
 - [ ] richer notifier formatting (Slack blocks / Discord embeds)
-- [ ] more passive discovery sources — crt.sh + Wayback shipped; OTX next
+- [x] more passive discovery sources — crt.sh, Wayback, and OTX
 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Good first issues are
 labeled `good-first-issue`.
@@ -255,3 +255,4 @@ MIT — see [LICENSE](LICENSE).
 [hx]: https://github.com/projectdiscovery/httpx
 [crtsh]: https://crt.sh
 [wb]: https://web.archive.org
+[otx]: https://otx.alienvault.com

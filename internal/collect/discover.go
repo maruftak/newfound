@@ -17,6 +17,7 @@ var defaultSources = []source{
 	{"subfinder", Subfinder},
 	{"crt.sh", CrtSh},
 	{"wayback", Wayback},
+	{"otx", OTX},
 }
 
 // Discover runs every discovery source for the given root targets and merges
